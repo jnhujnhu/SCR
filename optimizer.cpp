@@ -33,7 +33,10 @@ std::vector<double>* optimizer::SGD(DNN* dnn, MatrixXr* X, MatrixXr* Y, size_t n
             tuple *= -step_size;
         dnn->update_parameters(tuples);
         if(f_save && !(i % n_save_interval)) {
-            loss_shots->push_back(dnn->zero_oracle(full_batch));
+            double loss = dnn->zero_oracle(full_batch);
+            loss_shots->push_back(loss);
+            std::cout.precision(13);
+            std::cout << "Iteration " << i << " with loss = " << loss << std::endl;
         }
         // Clean up temp memory
         for(auto tuple : tuples)

@@ -13,6 +13,7 @@ DNN::DNN(size_t i_n_layers, size_t* i_stuc_layers, size_t n_params, double* para
     memcpy(m_params, params, n_params * sizeof(double));
     m_regularizer = regularizer;
 
+    srand((unsigned int) time(0));
     m_weights = new std::vector<MatrixXr*>;
     m_biases = new std::vector<VectorXr*>;
     for(size_t i = 0; i < n_layers - 1; i ++) {
@@ -83,7 +84,7 @@ double DNN::zero_oracle(Batch batch) {
             else
                 activations::softmax(&temp);
         }
-        loss += - ((*Y).row(i).transpose().array() * (temp.array().log()).array()).sum() / N;
+        loss += - ((*Y).row(i).transpose().array() * (temp.array().log()).array()).mean() / N;
     }
     return loss;
 }

@@ -1,6 +1,6 @@
 clear;
 mex_all;
-load 'mnist.scale.mat';
+load 'satimage.scale.mat';
 
 %% Parse Data
 [N, Dim] = size(X);
@@ -15,31 +15,29 @@ X = full(X');
 
 %% Set Params
 % X, Y, CLASS, n_layers, stuc_layers, algorithm, lambda, batch_size,
-% n_iteraions, n_save_interval, step_size
-Class = 10;
+% n_iterations, n_save_interval, step_size
+Class = 6;
 n_layers = 2; % No. of Hidden Layers
-stuc_layers = [20, 30]; % No. of Nodes in Each HL.
+stuc_layers = [10, 20]; % No. of Nodes in Each HL.
 lambda = 1e-4; % lambda for L2 Regularizer
-n_save_interval = 1;
-batch_size = fix(N / n_save_interval);
-passes = 50;
-X_algos = [0:1:passes]';
-
+n_save_interval = 10;
+batch_size = 100;
 is_plot = true;
 
 % SGD
 algorithm = 'SGD';
-step_size = 0.5;
-n_iteraions = passes * n_save_interval;
+step_size = 0.6;
+n_iterations = 500;
 fprintf('Algorithm: %s\n', algorithm);
 tic;
 hist1 = interface(X, y, Class, n_layers, stuc_layers, algorithm, lambda...
-    , batch_size, n_iteraions, n_save_interval, step_size);
+    , batch_size, n_iterations, n_save_interval, step_size);
 time = toc;
 fprintf('Time: %f seconds \n', time);
-hist1 = [X_algos, hist1];
+X_SGD = [0:n_save_interval:n_iterations]';
+hist1 = [X_SGD, hist1];
+clear X_SGD;
 
-clear X_algos;
 %% Plot
 if(is_plot)
     aa1 = min(hist1(:, 2));
@@ -54,8 +52,8 @@ if(is_plot)
     % hold on,semilogy(hist2(1:b:end,1), abs(hist2(1:b:end,2) - minval),'g-.^','linewidth',1.6,'markersize',4.5);
     % hold on,semilogy(hist3(1:b:end,1), abs(hist3(1:b:end,2) - minval),'c--+','linewidth',1.2,'markersize',4.5);
     hold off;
-    xlabel('Number of effective passes');
+    xlabel('Number of Steps');
     ylabel('Loss');
-    axis([0 passes 0  aa]);
+    axis([0 n_iterations 0 aa]);
     legend('SGD');
 end
