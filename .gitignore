@@ -1,0 +1,49 @@
+# Prerequisites
+*.d
+
+# reference
+*.pdf
+
+# figure
+*.eps
+*.png
+
+# dataset
+*.dat
+*.mat
+
+# template
+*.cpp.t
+*.hpp.t
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+*.mexa64
+
+# Executables
+test
+*.exe
+*.out
+*.app
