@@ -2,7 +2,7 @@
 #include "activations.hpp"
 
 DNN::DNN(size_t i_n_layers, size_t* i_stuc_layers, size_t n_params, double* params
-    , double std_dev, int regularizer) {
+    , double std_dev, size_t initializer, int regularizer) {
     n_layers = i_n_layers + 2;
     stuc_layers = new size_t[n_layers];
     stuc_layers[0] = DIM;
@@ -18,12 +18,10 @@ DNN::DNN(size_t i_n_layers, size_t* i_stuc_layers, size_t n_params, double* para
     m_biases = new std::vector<VectorXr*>;
     for(size_t i = 0; i < n_layers - 1; i ++) {
         MatrixXr* t_weights = new MatrixXr(stuc_layers[i + 1], stuc_layers[i]);
-        (*t_weights).setRandom(stuc_layers[i + 1], stuc_layers[i]);
-        (*t_weights) = (*t_weights) * std_dev;
+        initialize(t_weights, std_dev, initializer);
         m_weights->push_back(t_weights);
         VectorXr* t_biases = new VectorXr(stuc_layers[i + 1]);
-        (*t_biases).setRandom(stuc_layers[i + 1]);
-        (*t_biases) = (*t_biases) * std_dev;
+        initialize(t_biases, std_dev, initializer);
         m_biases->push_back(t_biases);
     }
 }
@@ -41,12 +39,26 @@ DNN::~DNN() {
     delete m_biases;
 }
 
-void DNN::initialize(double std_dev) {
-    for(size_t i = 0; i < n_layers - 1; i ++) {
-        (*m_weights)[i]->setRandom(stuc_layers[i + 1], stuc_layers[i]);
-        *(*m_weights)[i] = *(*m_weights)[i] * std_dev;
-        (*m_biases)[i]->setRandom(stuc_layers[i + 1]);
-        *(*m_biases)[i] = *(*m_biases)[i] * std_dev;
+template<typename Derived>
+void DNN::initialize(Eigen::PlainObjectBase<Derived>* _mx, double std_dev
+    , size_t method) {
+    switch(method) {
+        case I_UNIFORM:
+            _mx->setRandom(_mx->rows(), _mx->cols());
+            *_mx = *_mx * std_dev;
+            break;
+        case I_GAUSSIAN:{
+            std::random_device rd;
+            std::default_random_engine generator(rd());
+            std::normal_distribution<double> distribution(0, std_dev);
+            for(size_t i = 0; i < _mx->rows(); i ++)
+                for(size_t j = 0; j < _mx->cols(); j ++)
+                    (*_mx)(i, j) = distribution(generator);
+            break;
+        }
+        case I_ZERO:
+            _mx->setZero(_mx->rows(), _mx->cols());
+            break;
     }
 }
 
@@ -136,6 +148,30 @@ std::vector<Tuple> DNN::first_oracle(Batch batch) {
     return result;
 }
 
-// std::vector<Tuple> DNN::hessian_vector_oracle(Batch batch, MatrixXr* V) {
-//
-// }
+// TODO:
+std::vector<Tuple> DNN::hessian_vector_oracle(Batch batch, MatrixXr* V) {
+}
+
+double DNN::get_accuracy(Batch test_batch) {
+    MatrixXr* X = test_batch._X;
+    MatrixXr* Y = test_batch._Y;
+    size_t N = test_batch._n;
+
+    double accuracy = 0.0;
+    for(size_t i = 0; i < N; i ++) {
+        MatrixXr temp = (*X).row(i).transpose();
+        for (size_t j = 0; j < n_layers - 1; j ++) {
+            temp = *(*m_weights)[j] * temp + *(*m_biases)[j];
+            if(j < n_layers - 2)
+                activations::softplus(&temp);
+            else
+                activations::softmax(&temp);
+        }
+        int argmax_Y, argmax_temp;
+        (*Y).row(i).maxCoeff(&argmax_Y);
+        temp.col(0).maxCoeff(&argmax_temp);
+        if(argmax_temp == argmax_Y)
+            accuracy += 1.0 / N;
+    }
+    return accuracy;
+}

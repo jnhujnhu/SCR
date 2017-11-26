@@ -5,7 +5,6 @@
 
 extern size_t DIM;
 extern size_t CLASS;
-extern size_t NF;
 
 namespace global_def {
     typedef Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> MatrixXr;
@@ -16,6 +15,11 @@ namespace global_def {
     const int L1 = 0;
     const int L2 = 1;
     const int ELASTIC_NET = 2;
+
+    // Initializer
+    const size_t I_GAUSSIAN = 1;
+    const size_t I_UNIFORM = 2;
+    const size_t I_ZERO = 3;
 
     class Tuple {
     public:
