@@ -81,12 +81,29 @@ void DNN::update_parameters(std::vector<Tuple> tuples) {
     }
 }
 
+std::vector<Tuple> DNN::get_zero_tuples() {
+    std::vector<Tuple> zero_tuples;
+    for(size_t i = 0; i < n_layers - 1; i ++) {
+        MatrixXr* t_weights = new MatrixXr(stuc_layers[i + 1], stuc_layers[i]);
+        (*t_weights).setZero(stuc_layers[i + 1], stuc_layers[i]);
+        VectorXr* t_biases = new VectorXr(stuc_layers[i + 1]);
+        (*t_biases).setZero(stuc_layers[i + 1]);
+        Tuple tuple(t_weights, t_biases);
+        zero_tuples.push_back(tuple);
+    }
+    return zero_tuples;
+}
+
+size_t DNN::get_n_layers() {
+    return this->n_layers;
+}
+
 double DNN::zero_oracle(Batch batch) {
     MatrixXr* X = batch._X;
     MatrixXr* Y = batch._Y;
     size_t N = batch._n;
 
-    double loss = 0;
+    double loss = 0, regularizer = 0;
     for(size_t i = 0; i < N; i ++) {
         MatrixXr temp = (*X).row(i).transpose();
         for (size_t j = 0; j < n_layers - 1; j ++) {
@@ -95,10 +112,16 @@ double DNN::zero_oracle(Batch batch) {
                 activations::softplus(&temp);
             else
                 activations::softmax(&temp);
+
+            // Add L2 Regularizer
+            if(i == 0) {
+                regularizer += (*(*m_weights)[j]).squaredNorm()
+                        + (*(*m_biases)[j]).squaredNorm();
+            }
         }
         loss += - ((*Y).row(i).transpose().array() * (temp.array().log()).array()).mean() / N;
     }
-    return loss;
+    return loss + m_params[0] / 2 * regularizer;
 }
 
 std::vector<Tuple> DNN::first_oracle(Batch batch) {
@@ -106,15 +129,7 @@ std::vector<Tuple> DNN::first_oracle(Batch batch) {
     MatrixXr* Y = batch._Y;
     size_t N = batch._n;
 
-    std::vector<Tuple> result;
-    for(size_t i = 0; i < n_layers - 1; i ++) {
-        MatrixXr* t_weights = new MatrixXr(stuc_layers[i + 1], stuc_layers[i]);
-        (*t_weights).setZero(stuc_layers[i + 1], stuc_layers[i]);
-        VectorXr* t_biases = new VectorXr(stuc_layers[i + 1]);
-        (*t_biases).setZero(stuc_layers[i + 1]);
-        Tuple tuple(t_weights, t_biases);
-        result.push_back(tuple);
-    }
+    std::vector<Tuple> result = get_zero_tuples();
     for(size_t i = 0; i < N; i ++) {
         MatrixXr temp = (*X).row(i).transpose();
         std::vector<MatrixXr> _X;
@@ -135,6 +150,9 @@ std::vector<Tuple> DNN::first_oracle(Batch batch) {
                 activations::loss_1th_derivative(result[j], t_F, &_pX, &_X[j]
                     , &_Y, N);
                 _D = _pX;
+
+                // Add L2 Regularizer
+                result[j](t_F, m_params[0]);
             }
             else {
                 MatrixXr _pX(1, stuc_layers[j]);
@@ -142,6 +160,9 @@ std::vector<Tuple> DNN::first_oracle(Batch batch) {
                 activations::softplus_1th_derivative(result[j], t_F, &_pX, &_X[j]
                     , &_D, N);
                 _D = _pX;
+
+                // Add L2 Regularizer
+                result[j](t_F, m_params[0]);
             }
         }
     }

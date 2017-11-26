@@ -13,12 +13,13 @@ public:
     void print_all();
     // passing increments
     void update_parameters(std::vector<Tuple> tuples);
-
+    double get_accuracy(Batch test_batch);
     double zero_oracle(Batch batch);
     std::vector<Tuple> first_oracle(Batch batch);
     std::vector<Tuple> hessian_vector_oracle(Batch batch, MatrixXr* V);
 
-    double get_accuracy(Batch test_batch);
+    std::vector<Tuple> get_zero_tuples();
+    size_t get_n_layers();
 private:
     template<typename Derived>
     void initialize(Eigen::PlainObjectBase<Derived>* _mx, double std_dev

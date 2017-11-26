@@ -33,7 +33,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
         size_t stuc_layers[n_layers];
         for(size_t i = 0; i < n_layers; i ++)
             stuc_layers[i] = (size_t) (int) i_stuc_layers[i];
-        DNN dnn(n_layers, stuc_layers, 1, &lambda, sqrt(6 / (DIM + CLASS)));
+        DNN dnn(n_layers, stuc_layers, 1, &lambda, 1.3 / sqrt((double)(DIM + CLASS)), I_GAUSSIAN);
 
         // Parse Data Matrices
         Eigen::Map<MatrixXr>* X = new Eigen::Map<MatrixXr>(r_X, NF, DIM);
@@ -63,7 +63,15 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
             len_stored_loss = outs._losses->size();
             len_stored_acc = outs._accuracies->size();
         }
-        else if(strcmp(_algo, "ADAM") == 0) {
+        else if(strcmp(_algo, "Adam") == 0) {
+            double* adam_params = mxGetPr(prhs[13]);  // [Beta1, Beta2, Epsilon]
+            optimizer::outputs outs = optimizer::Adam(&dnn, train_batch
+                , test_batch, batch_size, n_iteraions,n_save_interval, step_size
+                , adam_params[0], adam_params[1], adam_params[2], f_save);
+            stored_loss = &(*outs._losses)[0];
+            stored_acc = &(*outs._accuracies)[0];
+            len_stored_loss = outs._losses->size();
+            len_stored_acc = outs._accuracies->size();
         }
         else if(strcmp(_algo, "SCR") == 0) {
         }

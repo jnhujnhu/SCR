@@ -43,9 +43,41 @@ Tuple& Tuple::operator -=(const Tuple& rhs) {
     return *this;
 }
 
+// Coeffwise
+Tuple& Tuple::operator *=(const Tuple& rhs) {
+    *(this->_w) = (*(this->_w)).array() * (*(rhs._w)).array();
+    *(this->_b) = (*(this->_b)).array() * (*(rhs._b)).array();
+    return *this;
+}
+
+// Coeffwise
+Tuple& Tuple::operator /=(const Tuple& rhs) {
+    *(this->_w) = (*(this->_w)).array() / (*(rhs._w)).array();
+    *(this->_b) = (*(this->_b)).array() / (*(rhs._b)).array();
+    return *this;
+}
+
 Tuple& Tuple::operator *=(const double rhs) {
     *(this->_w) *= rhs;
     *(this->_b) *= rhs;
+    return *this;
+}
+
+Tuple& Tuple::operator +=(const double rhs) {
+    *(this->_w) = (*this->_w).array() + rhs;
+    *(this->_b) = (*this->_b).array() + rhs;
+    return *this;
+}
+
+// Add scalar * rhs
+void Tuple::operator ()(const Tuple& rhs, const double scalar) {
+    *(this->_w) += *rhs._w * scalar;
+    *(this->_b) += *rhs._b * scalar;
+}
+
+Tuple& Tuple::coeff_root() {
+    *(this->_w) = (*this->_w).array().sqrt();
+    *(this->_b) = (*this->_b).array().sqrt();
     return *this;
 }
 
