@@ -19,6 +19,10 @@ namespace optimizer {
     outputs Adam(DNN* dnn, Batch train_batch, Batch test_batch, size_t n_batch_size
         , size_t n_iteraions, size_t n_save_interval, double step_size, double beta1
         , double beta2, double epsilon, bool f_save);
+    outputs SCR(DNN* dnn, Batch train_batch, Batch test_batch, size_t g_batch_size
+        , size_t hv_batch_size, size_t n_iteraions, size_t sub_iterations
+        , size_t n_save_interval, size_t petb_interval, double eta, double rho
+        , double sigma, bool f_save);
 }
 
 #endif

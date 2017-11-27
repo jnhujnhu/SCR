@@ -103,3 +103,69 @@ optimizer::outputs optimizer::Adam(DNN* dnn, Batch train_batch, Batch test_batch
     optimizer::outputs outs(loss_shots, acc_shots);
     return outs;
 }
+
+optimizer::outputs optimizer::SCR(DNN* dnn, Batch train_batch, Batch test_batch
+    , size_t g_batch_size, size_t hv_batch_size, size_t n_iteraions, size_t sub_iterations
+    , size_t n_save_interval, size_t petb_interval, double eta, double rho, double sigma
+    , bool f_save) {
+    std::vector<double>* loss_shots = new std::vector<double>;
+    std::vector<double>* acc_shots = new std::vector<double>;
+    if(f_save) {
+        loss_shots->push_back(dnn->zero_oracle(train_batch));
+        acc_shots->push_back(dnn->get_accuracy(test_batch));
+    }
+    size_t n_layers = dnn->get_n_layers();
+    for(size_t i = 0; i < n_iteraions; i ++) {
+        Batch g_batch = random_batch_generator(train_batch, g_batch_size);
+        Batch hv_batch = random_batch_generator(train_batch, hv_batch_size);
+
+        std::vector<Tuple> grad = dnn->first_oracle(g_batch);
+        std::vector<Tuple> delta = dnn->get_zero_tuples();
+        // Cubic Subproblem
+        for(size_t j = 0; j < sub_iterations; j ++) {
+            std::vector<Tuple> hv_delta = dnn->hessian_vector_oracle(hv_batch, delta);
+            // Perturbe iterate every petb_interval steps
+            if(!(j % petb_interval)) {
+                std::vector<Tuple> petb_tuples = dnn->get_perturb_tuples();
+                for(size_t k = 0; k < n_layers - 1; k ++)
+                    delta[k](petb_tuples[k], sigma);
+                // Clean up memory
+                for(auto tuple : petb_tuples)
+                    tuple.clean_up();
+            }
+            double delta_prefix = 0;
+            for(size_t k = 0; k < n_layers - 1; k ++) {
+                grad[k] += hv_delta[k];
+                delta_prefix += delta[k].l2_norm_square();
+            }
+            delta_prefix = sqrt(delta_prefix) * rho / 2;
+            for(size_t k = 0; k < n_layers - 1; k ++) {
+                grad[k](delta[k], delta_prefix);
+                delta[k](grad[k], -eta);
+            }
+            // Clean up memory
+            for(auto tuple : hv_delta)
+                tuple.clean_up();
+        }
+        dnn->update_parameters(delta);
+
+        if(f_save && !(i % n_save_interval)) {
+            double loss = dnn->zero_oracle(train_batch);
+            double acc = dnn->get_accuracy(test_batch);
+            loss_shots->push_back(loss);
+            acc_shots->push_back(acc);
+            std::cout.precision(13);
+            std::cout << "Iteration " << i << " with loss = " << loss
+                << " acc = " << acc << std::endl;
+        }
+        // Clean up temp memory
+        for(auto tuple : grad)
+            tuple.clean_up();
+        for(auto tuple : delta)
+            tuple.clean_up();
+        g_batch.clean_up();
+        hv_batch.clean_up();
+    }
+    optimizer::outputs outs(loss_shots, acc_shots);
+    return outs;
+}

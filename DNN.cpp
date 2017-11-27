@@ -62,6 +62,13 @@ void DNN::initialize(Eigen::PlainObjectBase<Derived>* _mx, double std_dev
     }
 }
 
+double DNN::gaussian_unary(double dummy) {
+    std::random_device rd;
+    std::default_random_engine generator(rd());
+    std::normal_distribution<double> distribution(0, 1);
+    return distribution(generator);
+}
+
 void DNN::print_all() {
     for(size_t i = 0; i < n_layers - 1; i ++) {
         std::cout << "========  LAYER " << i + 1 << "  ========" << std::endl;
@@ -92,6 +99,38 @@ std::vector<Tuple> DNN::get_zero_tuples() {
         zero_tuples.push_back(tuple);
     }
     return zero_tuples;
+}
+
+std::vector<Tuple> DNN::get_ones_tuples() {
+    std::vector<Tuple> zero_tuples;
+    for(size_t i = 0; i < n_layers - 1; i ++) {
+        MatrixXr* t_weights = new MatrixXr(stuc_layers[i + 1], stuc_layers[i]);
+        (*t_weights).setOnes(stuc_layers[i + 1], stuc_layers[i]);
+        VectorXr* t_biases = new VectorXr(stuc_layers[i + 1]);
+        (*t_biases).setOnes(stuc_layers[i + 1]);
+        Tuple tuple(t_weights, t_biases);
+        zero_tuples.push_back(tuple);
+    }
+    return zero_tuples;
+}
+
+std::vector<Tuple> DNN::get_perturb_tuples() {
+    std::random_device rd;
+    std::default_random_engine generator(rd());
+    std::normal_distribution<double> distribution(0, 1);
+    std::vector<Tuple> petb_tuples;
+
+    for(size_t i = 0; i < n_layers - 1; i ++) {
+        MatrixXr* t_weights = new MatrixXr(stuc_layers[i + 1], stuc_layers[i]);
+        t_weights->unaryExpr(std::ptr_fun(gaussian_unary));
+        t_weights->normalize();
+        VectorXr* t_biases = new VectorXr(stuc_layers[i + 1]);
+        t_biases->unaryExpr(std::ptr_fun(gaussian_unary));
+        t_biases->normalize();
+        Tuple tuple(t_weights, t_biases);
+        petb_tuples.push_back(tuple);
+    }
+    return petb_tuples;
 }
 
 size_t DNN::get_n_layers() {
@@ -150,9 +189,6 @@ std::vector<Tuple> DNN::first_oracle(Batch batch) {
                 activations::loss_1th_derivative(result[j], t_F, &_pX, &_X[j]
                     , &_Y, N);
                 _D = _pX;
-
-                // Add L2 Regularizer
-                result[j](t_F, m_params[0]);
             }
             else {
                 MatrixXr _pX(1, stuc_layers[j]);
@@ -160,17 +196,61 @@ std::vector<Tuple> DNN::first_oracle(Batch batch) {
                 activations::softplus_1th_derivative(result[j], t_F, &_pX, &_X[j]
                     , &_D, N);
                 _D = _pX;
-
-                // Add L2 Regularizer
-                result[j](t_F, m_params[0]);
             }
         }
+    }
+    // Add L2 Regularizer
+    for (size_t j = 0; j < n_layers - 1; j ++) {
+        Tuple t_F((*m_weights)[j], (*m_biases)[j]);
+        result[j](t_F, m_params[0]);
     }
     return result;
 }
 
-// TODO:
-std::vector<Tuple> DNN::hessian_vector_oracle(Batch batch, MatrixXr* V) {
+std::vector<Tuple> DNN::hessian_vector_oracle(Batch batch, std::vector<Tuple> V) {
+    MatrixXr* X = batch._X;
+    MatrixXr* Y = batch._Y;
+    size_t N = batch._n;
+
+    std::vector<Tuple> result = get_zero_tuples();
+    for(size_t i = 0; i < N; i ++) {
+        MatrixXr temp = (*X).row(i).transpose();
+        std::vector<MatrixXr> _X;
+        _X.push_back(temp);
+        // feed forward
+        for (size_t j = 0; j < n_layers - 2; j ++) {
+            temp = *(*m_weights)[j] * temp + *(*m_biases)[j];
+            activations::softplus(&temp);
+            _X.push_back(temp);
+        }
+        // back propagation
+        MatrixXr _D, _hvD;
+        for(int j = n_layers - 2; j >= 0; j --) {
+            if(j == int(n_layers) - 2) {
+                MatrixXr _Y = (*Y).row(i).transpose();
+                MatrixXr _pX(1, stuc_layers[j]);
+                MatrixXr _hvX(1, stuc_layers[j]);
+                Tuple t_F((*m_weights)[j], (*m_biases)[j]);
+                activations::loss_2th_hessian_vector(result[j], t_F, V[j], &_pX
+                    , &_hvX, &_X[j], &_Y, N);
+                _D = _pX;
+                _hvD = _hvX;
+            }
+            else {
+                MatrixXr _pX(1, stuc_layers[j]);
+                MatrixXr _hvX(1, stuc_layers[j]);
+                Tuple t_F((*m_weights)[j], (*m_biases)[j]);
+                activations::softplus_2th_hessian_vector(result[j], t_F, V[j]
+                    , &_pX, &_hvX, &_X[j], &_D, &_hvD, N);
+                _D = _pX;
+                _hvD = _hvX;
+            }
+        }
+    }
+    // Add L2 Regularizer
+    for (size_t j = 0; j < n_layers - 1; j ++)
+        result[j](V[j], m_params[0]);
+    return result;
 }
 
 double DNN::get_accuracy(Batch test_batch) {

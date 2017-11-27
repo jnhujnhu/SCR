@@ -16,14 +16,18 @@ public:
     double get_accuracy(Batch test_batch);
     double zero_oracle(Batch batch);
     std::vector<Tuple> first_oracle(Batch batch);
-    std::vector<Tuple> hessian_vector_oracle(Batch batch, MatrixXr* V);
+    std::vector<Tuple> hessian_vector_oracle(Batch batch, std::vector<Tuple> V);
 
     std::vector<Tuple> get_zero_tuples();
+    std::vector<Tuple> get_ones_tuples();
+    // Generate perturbing Tuples
+    std::vector<Tuple> get_perturb_tuples();
     size_t get_n_layers();
 private:
     template<typename Derived>
     void initialize(Eigen::PlainObjectBase<Derived>* _mx, double std_dev
         , size_t method = I_UNIFORM);
+    static double gaussian_unary(double dummy);
     size_t n_layers;
     size_t* stuc_layers;
     double* m_params;

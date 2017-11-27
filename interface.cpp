@@ -56,7 +56,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
         size_t len_stored_loss, len_stored_acc;
         if(strcmp(_algo, "SGD") == 0) {
             optimizer::outputs outs = optimizer::SGD(&dnn, train_batch
-                , test_batch, batch_size, n_iteraions,n_save_interval, step_size
+                , test_batch, batch_size, n_iteraions, n_save_interval, step_size
                 , f_save);
             stored_loss = &(*outs._losses)[0];
             stored_acc = &(*outs._accuracies)[0];
@@ -66,7 +66,7 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
         else if(strcmp(_algo, "Adam") == 0) {
             double* adam_params = mxGetPr(prhs[13]);  // [Beta1, Beta2, Epsilon]
             optimizer::outputs outs = optimizer::Adam(&dnn, train_batch
-                , test_batch, batch_size, n_iteraions,n_save_interval, step_size
+                , test_batch, batch_size, n_iteraions, n_save_interval, step_size
                 , adam_params[0], adam_params[1], adam_params[2], f_save);
             stored_loss = &(*outs._losses)[0];
             stored_acc = &(*outs._accuracies)[0];
@@ -74,6 +74,19 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
             len_stored_acc = outs._accuracies->size();
         }
         else if(strcmp(_algo, "SCR") == 0) {
+            // [hv_batch_size, sub_iterations, petb_interval, eta, rho, sigma]
+            double* scr_params = mxGetPr(prhs[13]);
+            size_t hv_batch_size = (size_t)(int) scr_params[0];
+            size_t sub_iterations = (size_t)(int) scr_params[1];
+            size_t petb_interval = (size_t)(int) scr_params[2];
+            optimizer::outputs outs = optimizer::SCR(&dnn, train_batch
+                , test_batch, batch_size, hv_batch_size, n_iteraions, sub_iterations
+                , n_save_interval, petb_interval, scr_params[3], scr_params[4]
+                , scr_params[5], f_save);
+            stored_loss = &(*outs._losses)[0];
+            stored_acc = &(*outs._accuracies)[0];
+            len_stored_loss = outs._losses->size();
+            len_stored_acc = outs._accuracies->size();
         }
         else mexErrMsgTxt("400 Unrecognized algorithm.");
         delete[] _algo;
