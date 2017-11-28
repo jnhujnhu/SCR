@@ -186,14 +186,14 @@ std::vector<Tuple> DNN::first_oracle(Batch batch) {
                 MatrixXr _Y = (*Y).row(i).transpose();
                 MatrixXr _pX(1, stuc_layers[j]);
                 Tuple t_F((*m_weights)[j], (*m_biases)[j]);
-                activations::loss_1th_derivative(result[j], t_F, &_pX, &_X[j]
+                activations::loss_1th_backpropagation(result[j], t_F, &_pX, &_X[j]
                     , &_Y, N);
                 _D = _pX;
             }
             else {
                 MatrixXr _pX(1, stuc_layers[j]);
                 Tuple t_F((*m_weights)[j], (*m_biases)[j]);
-                activations::softplus_1th_derivative(result[j], t_F, &_pX, &_X[j]
+                activations::softplus_1th_backpropagation(result[j], t_F, &_pX, &_X[j]
                     , &_D, N);
                 _D = _pX;
             }
@@ -207,6 +207,7 @@ std::vector<Tuple> DNN::first_oracle(Batch batch) {
     return result;
 }
 
+// Using R{} Technique
 std::vector<Tuple> DNN::hessian_vector_oracle(Batch batch, std::vector<Tuple> V) {
     MatrixXr* X = batch._X;
     MatrixXr* Y = batch._Y;
@@ -214,16 +215,28 @@ std::vector<Tuple> DNN::hessian_vector_oracle(Batch batch, std::vector<Tuple> V)
 
     std::vector<Tuple> result = get_zero_tuples();
     for(size_t i = 0; i < N; i ++) {
-        MatrixXr temp = (*X).row(i).transpose();
+        MatrixXr temp_X = (*X).row(i).transpose();
+        MatrixXr temp_RX = temp_X;
+        temp_RX.setZero();
         std::vector<MatrixXr> _X;
-        _X.push_back(temp);
-        // feed forward
+        std::vector<MatrixXr> _RX;
+        _X.push_back(temp_X);
+        _RX.push_back(temp_RX);
+        // HV feed forward
         for (size_t j = 0; j < n_layers - 2; j ++) {
-            temp = *(*m_weights)[j] * temp + *(*m_biases)[j];
-            activations::softplus(&temp);
-            _X.push_back(temp);
+            MatrixXr prev_temp_X = temp_X, prev_temp_RX = temp_RX;
+            temp_X = *(*m_weights)[j] * temp_X + *(*m_biases)[j];
+            temp_RX = temp_X;
+            activations::softplus(&temp_X);
+            // softplus_1th_derivative
+            activations::sigmoid(&temp_RX);
+            temp_RX = temp_RX.array() * (*V[j]._w * prev_temp_X
+                              + *(*m_weights)[j] * prev_temp_RX
+                              + *V[j]._b).array();
+            _X.push_back(temp_X);
+            _RX.push_back(temp_RX);
         }
-        // back propagation
+        // HV back propagation
         MatrixXr _D, _hvD;
         for(int j = n_layers - 2; j >= 0; j --) {
             if(j == int(n_layers) - 2) {
@@ -231,8 +244,8 @@ std::vector<Tuple> DNN::hessian_vector_oracle(Batch batch, std::vector<Tuple> V)
                 MatrixXr _pX(1, stuc_layers[j]);
                 MatrixXr _hvX(1, stuc_layers[j]);
                 Tuple t_F((*m_weights)[j], (*m_biases)[j]);
-                activations::loss_2th_hessian_vector(result[j], t_F, V[j], &_pX
-                    , &_hvX, &_X[j], &_Y, N);
+                activations::loss_2th_hessian_vector_bp(result[j], t_F, V[j], &_pX
+                    , &_hvX, &_X[j], &_RX[j], &_Y, N);
                 _D = _pX;
                 _hvD = _hvX;
             }
@@ -240,8 +253,8 @@ std::vector<Tuple> DNN::hessian_vector_oracle(Batch batch, std::vector<Tuple> V)
                 MatrixXr _pX(1, stuc_layers[j]);
                 MatrixXr _hvX(1, stuc_layers[j]);
                 Tuple t_F((*m_weights)[j], (*m_biases)[j]);
-                activations::softplus_2th_hessian_vector(result[j], t_F, V[j]
-                    , &_pX, &_hvX, &_X[j], &_D, &_hvD, N);
+                activations::softplus_2th_hessian_vector_bp(result[j], t_F, V[j]
+                    , &_pX, &_hvX, &_X[j], &_RX[j], &_D, &_hvD, N);
                 _D = _pX;
                 _hvD = _hvX;
             }

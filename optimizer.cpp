@@ -125,14 +125,14 @@ optimizer::outputs optimizer::SCR(DNN* dnn, Batch train_batch, Batch test_batch
         for(size_t j = 0; j < sub_iterations; j ++) {
             std::vector<Tuple> hv_delta = dnn->hessian_vector_oracle(hv_batch, delta);
             // Perturbe iterate every petb_interval steps
-            if(!(j % petb_interval)) {
-                std::vector<Tuple> petb_tuples = dnn->get_perturb_tuples();
-                for(size_t k = 0; k < n_layers - 1; k ++)
-                    delta[k](petb_tuples[k], sigma);
-                // Clean up memory
-                for(auto tuple : petb_tuples)
-                    tuple.clean_up();
-            }
+            // if(!(j % petb_interval)) {
+            //     std::vector<Tuple> petb_tuples = dnn->get_perturb_tuples();
+            //     for(size_t k = 0; k < n_layers - 1; k ++)
+            //         delta[k](petb_tuples[k], sigma);
+            //     // Clean up memory
+            //     for(auto tuple : petb_tuples)
+            //         tuple.clean_up();
+            // }
             double delta_prefix = 0;
             for(size_t k = 0; k < n_layers - 1; k ++) {
                 grad[k] += hv_delta[k];

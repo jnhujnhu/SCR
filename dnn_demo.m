@@ -27,13 +27,13 @@ Class = 6;
 n_layers = 1; % No. of Hidden Layers
 stuc_layers = [100]; % No. of Nodes in Each HL.
 lambda = 1e-6; % lambda for L2 Regularizer
-n_save_interval = 50;
-batch_size = 20;
+n_save_interval = 2;
+batch_size = 2000;
 is_plot = true;
 
 % %% SGD
 % algorithm = 'SGD';
- step_size = 0.1;
+step_size = 0.1;
 % n_iterations = 6000;
 % fprintf('Algorithm: %s\n', algorithm);
 % tic;
@@ -62,10 +62,10 @@ is_plot = true;
 
 %% SCR
 algorithm = 'SCR';
-n_iterations = 800;
+n_iterations = 7;
 g_batch_size = 20;
 % SCR_params: [hv_batch_size, sub_iterations, petb_interval, eta, rho, sigma]
-scr_params = [100, 50, 10, 0.05, 2, 0.01];
+scr_params = [2000, 50, 10, 0.05, 2, 0.01];
 fprintf('Algorithm: %s\n', algorithm);
 tic;
 [loss3, acc3] = interface(X, y, XT, yT, Class, n_layers, stuc_layers, algorithm ...
