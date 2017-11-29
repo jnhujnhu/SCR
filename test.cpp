@@ -9,7 +9,7 @@ int main()
 {
     DIM = 4;
     CLASS = 3;
-    DNN dnn(1, new size_t[1]{10}, 1, new double[1]{0.2}, 0.2);// sqrt(6 / (DIM + CLASS)));
+    DNN dnn(3, new size_t[3]{10, 20, 30}, 1, new double[1]{0.2}, 0.01);// sqrt(6 / (DIM + CLASS)));
 
     // std::cout << a << std::endl;
 
@@ -22,9 +22,23 @@ int main()
          1,0,0,
          0,0,1;
     Batch batch(&X, &Y, 3);
-    std::vector<Tuple> res = dnn.hessian_vector_oracle(batch, dnn.get_ones_tuples());
-    for(auto tuple : res) {
-        tuple.print_all();
+    std::vector<Tuple> grad = dnn.first_oracle(batch);
+    std::vector<Tuple> delta2 = dnn.get_perturb_tuples();
+    std::vector<Tuple> delta = dnn.get_ones_tuples();
+    for(size_t j = 0; j < dnn.get_n_layers() - 1; j ++) {
+        (delta2[j] *= 3) += delta[j];
+        delta[j] = delta2[j];
     }
+    // Hessian Vector Check
+    std::vector<Tuple> res = dnn.hessian_vector_oracle(batch, delta);
+    std::vector<Tuple> res2 = dnn.hessian_vector_approxiamate_oracle(batch, grad, delta);
+    double a = 0, a2 = 0;
+    for(size_t j = 0; j < dnn.get_n_layers() - 1; j ++) {
+        delta[j] *= res[j];
+        delta2[j] *= res2[j];
+        a += delta[j].sum();
+        a2 += delta2[j].sum();
+    }
+    std::cout << a << std::endl << a2 << std::endl;
     // optimizer::SCR(&dnn, batch, batch, 3, 3, 200, 10, 1, 1, 0.05, 0, 1.1, true);
 }

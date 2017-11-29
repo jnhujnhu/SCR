@@ -7,7 +7,7 @@ void activations::softplus(MatrixXr* _vx){
 }
 // softplus_1th_derivative = sigmoid
 void activations::sigmoid(MatrixXr* _vx){
-    (*_vx) = (*_vx).array().exp() / ((*_vx).array().exp() + 1);
+    (*_vx) = 1.0 / ((-*_vx).array().exp() + 1);
 }
 
 void activations::softmax(MatrixXr* _vx){
@@ -18,7 +18,7 @@ void activations::softmax(MatrixXr* _vx){
 
 // _D: row vector
 void activations::softplus_1th_backpropagation(Tuple _pF, Tuple _F, MatrixXr* _pX
-    , MatrixXr* _X, MatrixXr* _D, size_t N) {
+    , MatrixXr* _X, MatrixXr* _D, size_t N, bool is_input_layer) {
     MatrixXr t_del = (*_F._w) * (*_X) + (*_F._b);
     MatrixXr t_sig = t_del.array().exp();
     t_sig = t_sig.array() / (t_sig.array() + 1).array();
@@ -31,7 +31,7 @@ void activations::softplus_1th_backpropagation(Tuple _pF, Tuple _F, MatrixXr* _p
 // _D: row vector
 void activations::softplus_2th_hessian_vector_bp(Tuple _hvF, Tuple _F, Tuple _V
     , MatrixXr* _pX, MatrixXr* _hvX, MatrixXr* _X, MatrixXr* _RX, MatrixXr* _D
-    , MatrixXr* _hvD, size_t N) {
+    , MatrixXr* _hvD, size_t N, bool is_input_layer) {
     MatrixXr dl_dy = (*_F._w) * (*_X) + (*_F._b);
     MatrixXr v = (*_V._w) * (*_X) + (*_V._b) + (*_F._w) * (*_RX);
     MatrixXr df_dy = dl_dy.array().exp();
@@ -39,26 +39,24 @@ void activations::softplus_2th_hessian_vector_bp(Tuple _hvF, Tuple _F, Tuple _V
     df_dy = df_dy.array() / (df_dy.array() + 1).array();
     dl_dy = ((*_D).transpose().array() * df_dy.array());
 
-    (*_pX) = dl_dy.transpose() * (*_F._w);
+    if(!is_input_layer)
+        (*_pX) = dl_dy.transpose() * (*_F._w);
 
     MatrixXr R_df_dy = df_dy.array() * (1 - df_dy.array()) * v.array();
-    MatrixXr R_df_dw = R_df_dy * (*_X).transpose() + df_dy * (*_RX).transpose();
 
     MatrixXr Rdl_dy = (*_hvD).transpose().array() * df_dy.array();
-    MatrixXr t_2 = ((*_D).transpose().array() * R_df_dy.array()).matrix()
-                  * (*_X).transpose()
-                 + ((*_D).transpose().array() * df_dy.array()).matrix()
-                  * (*_RX).transpose();
+    MatrixXr D_Rfy = (*_D).transpose().array() * R_df_dy.array();
+    MatrixXr D_fy = (*_D).transpose().array() * df_dy.array();
 
-    (*_hvF._w) += (Rdl_dy * (*_X).transpose() + t_2) / N;
+    MatrixXr D_Rff = D_Rfy * (*_X).transpose() + D_fy * (*_RX).transpose();
+
+    (*_hvF._w) += (Rdl_dy * (*_X).transpose() + D_Rff) / N;
     (*_hvF._b) += (Rdl_dy + ((*_D).transpose().array() * R_df_dy.array()).matrix()) / N;
 
-    MatrixXr t_3 = ((*_D).transpose().array() * R_df_dy.array()).matrix().transpose()
-                  * (*_F._w)
-                 + ((*_D).transpose().array() * df_dy.array()).matrix().transpose()
-                  * (*_V._w);
-
-    (*_hvX) = (Rdl_dy.transpose() * (*_F._w)) + t_3;
+    if(!is_input_layer) {
+        MatrixXr D_Rfx = D_Rfy.transpose()  * (*_F._w) + D_fy.transpose() * (*_V._w);
+        (*_hvX) = (Rdl_dy.transpose() * (*_F._w)) + D_Rfx;
+    }
 }
 
 // _pX: return row vector

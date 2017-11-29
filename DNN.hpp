@@ -17,6 +17,8 @@ public:
     double zero_oracle(Batch batch);
     std::vector<Tuple> first_oracle(Batch batch);
     std::vector<Tuple> hessian_vector_oracle(Batch batch, std::vector<Tuple> V);
+    std::vector<Tuple> hessian_vector_approxiamate_oracle(Batch batch
+        , std::vector<Tuple> grad, std::vector<Tuple> V);
 
     std::vector<Tuple> get_zero_tuples();
     std::vector<Tuple> get_ones_tuples();

@@ -121,31 +121,39 @@ optimizer::outputs optimizer::SCR(DNN* dnn, Batch train_batch, Batch test_batch
 
         std::vector<Tuple> grad = dnn->first_oracle(g_batch);
         std::vector<Tuple> delta = dnn->get_zero_tuples();
+        std::vector<Tuple> grad_sub = dnn->get_zero_tuples();
+        // // For Hessian_Vector_Approxiamate
+        // std::vector<Tuple> hv_grad = dnn->first_oracle(hv_batch);
         // Cubic Subproblem
         for(size_t j = 0; j < sub_iterations; j ++) {
+            // Hessian_Vector_Approxiamate
+            // std::vector<Tuple> hv_delta
+            //     = dnn->hessian_vector_approxiamate_oracle(hv_batch, hv_grad, delta);
+            // Hessian_Vector_Exact
             std::vector<Tuple> hv_delta = dnn->hessian_vector_oracle(hv_batch, delta);
             // Perturbe iterate every petb_interval steps
-            // if(!(j % petb_interval)) {
-            //     std::vector<Tuple> petb_tuples = dnn->get_perturb_tuples();
-            //     for(size_t k = 0; k < n_layers - 1; k ++)
-            //         delta[k](petb_tuples[k], sigma);
-            //     // Clean up memory
-            //     for(auto tuple : petb_tuples)
-            //         tuple.clean_up();
-            // }
+            if(petb_interval && !(j % petb_interval)) {
+                std::vector<Tuple> petb_tuples = dnn->get_perturb_tuples();
+                for(size_t k = 0; k < n_layers - 1; k ++)
+                    delta[k](petb_tuples[k], sigma);
+                // Clean up memory
+                for(auto tuple : petb_tuples)
+                    tuple.clean_up();
+            }
             double delta_prefix = 0;
             for(size_t k = 0; k < n_layers - 1; k ++) {
-                grad[k] += hv_delta[k];
+                grad_sub[k] = grad[k];
+                grad_sub[k] += hv_delta[k];
                 delta_prefix += delta[k].l2_norm_square();
             }
             delta_prefix = sqrt(delta_prefix) * rho / 2;
             for(size_t k = 0; k < n_layers - 1; k ++) {
-                grad[k](delta[k], delta_prefix);
-                delta[k](grad[k], -eta);
+                grad_sub[k](delta[k], delta_prefix);
+                delta[k](grad_sub[k], -eta);
             }
             // Clean up memory
-            for(auto tuple : hv_delta)
-                tuple.clean_up();
+            for(size_t k = 0; k < n_layers - 1; k ++)
+                hv_delta[k].clean_up();
         }
         dnn->update_parameters(delta);
 
@@ -158,11 +166,15 @@ optimizer::outputs optimizer::SCR(DNN* dnn, Batch train_batch, Batch test_batch
             std::cout << "Iteration " << i << " with loss = " << loss
                 << " acc = " << acc << std::endl;
         }
+        // // For Hessian_Vector_Approxiamate
+        // for(auto tuple : hv_grad)
+        //     tuple.clean_up();
         // Clean up temp memory
-        for(auto tuple : grad)
-            tuple.clean_up();
-        for(auto tuple : delta)
-            tuple.clean_up();
+        for(size_t k = 0; k < n_layers - 1; k ++) {
+            grad[k].clean_up();
+            grad_sub[k].clean_up();
+            delta[k].clean_up();
+        }
         g_batch.clean_up();
         hv_batch.clean_up();
     }

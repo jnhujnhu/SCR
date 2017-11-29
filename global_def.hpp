@@ -30,10 +30,12 @@ namespace global_def {
         Tuple& operator -=(const Tuple& rhs);
         Tuple& operator *=(const Tuple& rhs);
         Tuple& operator /=(const Tuple& rhs);
+        Tuple& operator =(const Tuple& rhs);
         Tuple& operator +=(const double rhs);
         Tuple& operator *=(const double rhs);
         void operator ()(const Tuple& rhs, const double scalar);
 
+        double sum();
         double l2_norm_square();
         Tuple& coeff_root();
 

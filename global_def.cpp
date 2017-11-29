@@ -57,6 +57,12 @@ Tuple& Tuple::operator /=(const Tuple& rhs) {
     return *this;
 }
 
+Tuple& Tuple::operator =(const Tuple& rhs) {
+    *(this->_w) = *(rhs._w);
+    *(this->_b) = *(rhs._b);
+    return *this;
+}
+
 Tuple& Tuple::operator *=(const double rhs) {
     *(this->_w) *= rhs;
     *(this->_b) *= rhs;
@@ -79,6 +85,10 @@ Tuple& Tuple::coeff_root() {
     *(this->_w) = (*this->_w).array().sqrt();
     *(this->_b) = (*this->_b).array().sqrt();
     return *this;
+}
+
+double Tuple::sum() {
+    return (*_w).sum() + (*_b).sum();
 }
 
 double Tuple::l2_norm_square() {
