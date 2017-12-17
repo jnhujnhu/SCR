@@ -26,38 +26,50 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
         size_t n_save_interval = (size_t) mxGetScalar(prhs[11]);
         double step_size = mxGetScalar(prhs[12]);
         bool f_save = false;
+        bool is_train_autoencoder = false;
         if(nlhs >= 1)
             f_save = true;
+        // leave only one output enables Autoencoder
+        if(nlhs == 1)
+            is_train_autoencoder = true;
 
         // Construct DNN Model
         size_t stuc_layers[n_layers];
         for(size_t i = 0; i < n_layers; i ++)
             stuc_layers[i] = (size_t) (int) i_stuc_layers[i];
-        DNN dnn(n_layers, stuc_layers, 1, &lambda, 1.3 / sqrt((double)(DIM + CLASS)), I_GAUSSIAN);
+        DNN dnn(n_layers, stuc_layers, 1, &lambda, 1.3 / sqrt((double)(DIM + CLASS))
+            , I_GAUSSIAN, is_train_autoencoder);
 
         // Parse Data Matrices
         Eigen::Map<MatrixXr>* X = new Eigen::Map<MatrixXr>(r_X, NF, DIM);
         Eigen::Map<MatrixXr>* XT = new Eigen::Map<MatrixXr>(r_XT, NT, DIM);
-        // Create 1-of-N Label Matrix
+        // Create 1-of-N Label Matrix for Classification
         MatrixXr* Y = new MatrixXr(NF, CLASS);
         MatrixXr* YT = new MatrixXr(NT, CLASS);
-        Y->setZero(NF, CLASS);
-        YT->setZero(NT, CLASS);
-        for(size_t i = 0; i < NF; i ++)
-            (*Y)(i, r_Y[i]) = 1;
-        for(size_t i = 0; i < NT; i ++)
-            (*YT)(i, r_YT[i]) = 1;
+        if(!is_train_autoencoder) {
+            Y->setZero(NF, CLASS);
+            YT->setZero(NT, CLASS);
+            for(size_t i = 0; i < NF; i ++)
+                (*Y)(i, r_Y[i]) = 1;
+            for(size_t i = 0; i < NT; i ++)
+                (*YT)(i, r_YT[i]) = 1;
+        }
         Batch train_batch((MatrixXr *)X, Y, NF);
         Batch test_batch((MatrixXr *)XT, YT, NT);
+
+        // Create Autoencoder Batch
+        if(is_train_autoencoder)
+            train_batch = Batch((MatrixXr *)X, (MatrixXr *)X, NF);
 
         char* _algo = new char[MAX_PARAM_STR_LEN];
         mxGetString(prhs[7], _algo, MAX_PARAM_STR_LEN);
         double *stored_loss, *stored_acc;
         size_t len_stored_loss, len_stored_acc;
         if(strcmp(_algo, "SGD") == 0) {
+            double decay = mxGetScalar(prhs[13]);
             optimizer::outputs outs = optimizer::SGD(&dnn, train_batch
                 , test_batch, batch_size, n_iteraions, n_save_interval, step_size
-                , f_save);
+                , decay, f_save);
             stored_loss = &(*outs._losses)[0];
             stored_acc = &(*outs._accuracies)[0];
             len_stored_loss = outs._losses->size();
@@ -68,6 +80,16 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
             optimizer::outputs outs = optimizer::Adam(&dnn, train_batch
                 , test_batch, batch_size, n_iteraions, n_save_interval, step_size
                 , adam_params[0], adam_params[1], adam_params[2], f_save);
+            stored_loss = &(*outs._losses)[0];
+            stored_acc = &(*outs._accuracies)[0];
+            len_stored_loss = outs._losses->size();
+            len_stored_acc = outs._accuracies->size();
+        }
+        else if(strcmp(_algo, "AdaGrad") == 0) {
+            double epsilon = mxGetScalar(prhs[13]);
+            optimizer::outputs outs = optimizer::AdaGrad(&dnn, train_batch
+                , test_batch, batch_size, n_iteraions, n_save_interval, step_size
+                , epsilon, f_save);
             stored_loss = &(*outs._losses)[0];
             stored_acc = &(*outs._accuracies)[0];
             len_stored_loss = outs._losses->size();
@@ -93,14 +115,18 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
 
         if(f_save) {
             plhs[0] = mxCreateDoubleMatrix(len_stored_loss, 1, mxREAL);
-            plhs[1] = mxCreateDoubleMatrix(len_stored_acc, 1, mxREAL);
         	double* res_stored_loss = mxGetPr(plhs[0]);
-            double* res_stored_acc = mxGetPr(plhs[1]);
             for(size_t i = 0; i < len_stored_loss; i ++)
                 res_stored_loss[i] = stored_loss[i];
-            for(size_t i = 0; i < len_stored_acc; i ++)
-                res_stored_acc[i] = stored_acc[i];
+            if(!is_train_autoencoder) {
+                plhs[1] = mxCreateDoubleMatrix(len_stored_acc, 1, mxREAL);
+                double* res_stored_acc = mxGetPr(plhs[1]);
+                for(size_t i = 0; i < len_stored_acc; i ++)
+                    res_stored_acc[i] = stored_acc[i];
+            }
         }
+        delete Y;
+        delete YT;
         delete[] stored_loss;
         delete[] stored_acc;
     } catch(std::string c) {

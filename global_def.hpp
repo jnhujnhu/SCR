@@ -23,6 +23,7 @@ namespace global_def {
 
     class Tuple {
     public:
+        Tuple();
         Tuple(MatrixXr* weights, VectorXr* biases): _w(weights), _b(biases) {}
         void clean_up();
         void print_all();
@@ -30,6 +31,7 @@ namespace global_def {
         Tuple& operator -=(const Tuple& rhs);
         Tuple& operator *=(const Tuple& rhs);
         Tuple& operator /=(const Tuple& rhs);
+        // Pointer Copy
         Tuple& operator =(const Tuple& rhs);
         Tuple& operator +=(const double rhs);
         Tuple& operator *=(const double rhs);
@@ -38,6 +40,7 @@ namespace global_def {
         double sum();
         double l2_norm_square();
         Tuple& coeff_root();
+        Tuple& reciprocal();
 
         MatrixXr* _w;
         VectorXr* _b;

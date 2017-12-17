@@ -1,6 +1,8 @@
 #ifndef DNN_HPP
 #define DNN_HPP
 #include <stdio.h>
+#include <vector>
+#include <random>
 #include "global_def.hpp"
 
 using namespace global_def;
@@ -8,7 +10,7 @@ class DNN {
 public:
     DNN(size_t i_n_layers, size_t* i_stuc_layers, size_t n_params, double* params
         , double std_dev = 1.0, size_t initializer = I_UNIFORM
-        , int regularizer = L2);
+        , bool is_autoencoder = false, int regularizer = L2);
     ~DNN();
     void print_all();
     // passing increments
@@ -25,6 +27,7 @@ public:
     // Generate perturbing Tuples
     std::vector<Tuple> get_perturb_tuples();
     size_t get_n_layers();
+    bool isAutoencoder();
 private:
     template<typename Derived>
     void initialize(Eigen::PlainObjectBase<Derived>* _mx, double std_dev
@@ -34,6 +37,7 @@ private:
     size_t* stuc_layers;
     double* m_params;
     int m_regularizer;
+    bool is_autoencoder;
     std::vector<MatrixXr*>* m_weights;
     std::vector<VectorXr*>* m_biases;
 };

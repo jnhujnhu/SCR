@@ -1,13 +1,29 @@
 #include "DNN.hpp"
 #include "activations.hpp"
+#include <time.h>
 
 DNN::DNN(size_t i_n_layers, size_t* i_stuc_layers, size_t n_params, double* params
-    , double std_dev, size_t initializer, int regularizer) {
-    n_layers = i_n_layers + 2;
-    stuc_layers = new size_t[n_layers];
-    stuc_layers[0] = DIM;
-    stuc_layers[n_layers - 1] = CLASS;
-    memcpy(&stuc_layers[1], i_stuc_layers, i_n_layers * sizeof(size_t));
+    , double std_dev, size_t initializer, bool is_autoencoder, int regularizer) {
+
+    this->is_autoencoder = is_autoencoder;
+    if(is_autoencoder) {
+        n_layers = 2 * i_n_layers + 3;
+        stuc_layers = new size_t[n_layers];
+        // Symmetric Encoder & Decoder
+        stuc_layers[0] = DIM;
+        stuc_layers[i_n_layers + 1] = CLASS;
+        stuc_layers[n_layers - 1] = DIM;
+        memcpy(&stuc_layers[1], i_stuc_layers, i_n_layers * sizeof(size_t));
+        for(size_t i = 0; i < i_n_layers; i ++)
+            stuc_layers[i_n_layers + 2 + i] = i_stuc_layers[i_n_layers - 1 - i];
+    }
+    else {
+        n_layers = i_n_layers + 2;
+        stuc_layers = new size_t[n_layers];
+        stuc_layers[0] = DIM;
+        stuc_layers[n_layers - 1] = CLASS;
+        memcpy(&stuc_layers[1], i_stuc_layers, i_n_layers * sizeof(size_t));
+    }
 
     m_params = new double[n_params];
     memcpy(m_params, params, n_params * sizeof(double));
@@ -79,6 +95,7 @@ void DNN::print_all() {
             <<"x1):\n";
         std::cout << *(*m_biases)[i] << std::endl;
     }
+    std::cout << "========  LAYER " << n_layers << "  ========" << std::endl;
 }
 
 void DNN::update_parameters(std::vector<Tuple> tuples) {
@@ -137,6 +154,10 @@ size_t DNN::get_n_layers() {
     return this->n_layers;
 }
 
+bool DNN::isAutoencoder() {
+    return this->is_autoencoder;
+}
+
 double DNN::zero_oracle(Batch batch) {
     MatrixXr* X = batch._X;
     MatrixXr* Y = batch._Y;
@@ -149,16 +170,23 @@ double DNN::zero_oracle(Batch batch) {
             temp = *(*m_weights)[j] * temp + *(*m_biases)[j];
             if(j < n_layers - 2)
                 activations::softplus(&temp);
-            else
-                activations::softmax(&temp);
-
+            else {
+                if(is_autoencoder)
+                    activations::sigmoid(&temp);
+                else
+                    activations::softmax(&temp);
+            }
             // Add L2 Regularizer
             if(i == 0) {
                 regularizer += (*(*m_weights)[j]).squaredNorm()
                         + (*(*m_biases)[j]).squaredNorm();
             }
         }
-        loss += - ((*Y).row(i).transpose().array() * (temp.array().log()).array()).mean() / N;
+        // Pixel-wise L2 Loss
+        if(is_autoencoder)
+            loss += ((*Y).row(i).transpose() - temp).squaredNorm() / (2.0 * DIM * N);
+        else
+            loss += - ((*Y).row(i).transpose().array() * (temp.array().log()).array()).mean() / N;
     }
     return loss + m_params[0] / 2 * regularizer;
 }
@@ -181,20 +209,25 @@ std::vector<Tuple> DNN::first_oracle(Batch batch) {
         }
         // back propagation
         MatrixXr _D;
+        size_t avg_const = (is_autoencoder) ? N * DIM : N * CLASS;
         for(int j = n_layers - 2; j >= 0; j --) {
             if(j == int(n_layers) - 2) {
                 MatrixXr _Y = (*Y).row(i).transpose();
                 MatrixXr _pX(1, stuc_layers[j]);
                 Tuple t_F((*m_weights)[j], (*m_biases)[j]);
-                activations::loss_1th_backpropagation(result[j], t_F, &_pX, &_X[j]
-                    , &_Y, N);
+                if(is_autoencoder)
+                    activations::l2loss_1th_backpropagation(result[j], t_F, &_pX, &_X[j]
+                        , &_Y, avg_const);
+                else
+                    activations::loss_1th_backpropagation(result[j], t_F, &_pX, &_X[j]
+                        , &_Y, avg_const);
                 _D = _pX;
             }
             else {
                 MatrixXr _pX(1, stuc_layers[j]);
                 Tuple t_F((*m_weights)[j], (*m_biases)[j]);
                 activations::softplus_1th_backpropagation(result[j], t_F, &_pX, &_X[j]
-                    , &_D, N, (j == 0) ? true : false);
+                    , &_D, avg_const, (j == 0) ? true : false);
                 _D = _pX;
             }
         }
@@ -256,14 +289,19 @@ std::vector<Tuple> DNN::hessian_vector_oracle(Batch batch, std::vector<Tuple> V)
         }
         // HV back propagation
         MatrixXr _D, _hvD;
+        size_t avg_const = (is_autoencoder) ? N * DIM : N * CLASS;
         for(int j = n_layers - 2; j >= 0; j --) {
             if(j == int(n_layers) - 2) {
                 MatrixXr _Y = (*Y).row(i).transpose();
                 MatrixXr _pX(1, stuc_layers[j]);
                 MatrixXr _hvX(1, stuc_layers[j]);
                 Tuple t_F((*m_weights)[j], (*m_biases)[j]);
-                activations::loss_2th_hessian_vector_bp(result[j], t_F, V[j], &_pX
-                    , &_hvX, &_X[j], &_RX[j], &_Y, N);
+                if(is_autoencoder)
+                    activations::l2loss_2th_hessian_vector_bp(result[j], t_F, V[j], &_pX
+                        , &_hvX, &_X[j], &_RX[j], &_Y, avg_const);
+                else
+                    activations::loss_2th_hessian_vector_bp(result[j], t_F, V[j], &_pX
+                        , &_hvX, &_X[j], &_RX[j], &_Y, avg_const);
                 _D = _pX;
                 _hvD = _hvX;
             }
@@ -272,7 +310,7 @@ std::vector<Tuple> DNN::hessian_vector_oracle(Batch batch, std::vector<Tuple> V)
                 MatrixXr _hvX(1, stuc_layers[j]);
                 Tuple t_F((*m_weights)[j], (*m_biases)[j]);
                 activations::softplus_2th_hessian_vector_bp(result[j], t_F, V[j]
-                    , &_pX, &_hvX, &_X[j], &_RX[j], &_D, &_hvD, N
+                    , &_pX, &_hvX, &_X[j], &_RX[j], &_D, &_hvD, avg_const
                     , (j == 0) ? true : false);
                 _D = _pX;
                 _hvD = _hvX;

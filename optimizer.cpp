@@ -1,12 +1,18 @@
 #include "optimizer.hpp"
+#include <random>
 
-Batch optimizer::random_batch_generator(Batch full_batch, size_t batch_size) {
+Batch optimizer::random_batch_generator(Batch full_batch, size_t batch_size
+    , bool is_autoencoder) {
     // Random Generator
     std::random_device rd;
     std::default_random_engine generator(rd());
     std::vector<int> indexes;
     MatrixXr* _X = new MatrixXr(batch_size, DIM);
-    MatrixXr* _Y = new MatrixXr(batch_size, CLASS);
+    MatrixXr* _Y;
+    if(is_autoencoder)
+        _Y = new MatrixXr(batch_size, DIM);
+    else
+        _Y = new MatrixXr(batch_size, CLASS);
     for(size_t i = 0; i < full_batch._n; i ++)
         indexes.push_back(i);
     for(size_t i = 0;i < batch_size; i ++) {
@@ -18,31 +24,54 @@ Batch optimizer::random_batch_generator(Batch full_batch, size_t batch_size) {
     }
     Batch batch(_X, _Y, batch_size);
     return batch;
-};
+}
+
+bool optimizer::standard_trace(DNN* dnn, size_t i, Batch train_batch, Batch test_batch
+    , std::vector<double>* loss_shots, std::vector<double>* acc_shots) {
+    double loss = dnn->zero_oracle(train_batch);
+    double acc;
+    loss_shots->push_back(loss);
+    if(!dnn->isAutoencoder()) {
+        acc = dnn->get_accuracy(test_batch);
+        acc_shots->push_back(acc);
+    }
+    std::cout.precision(13);
+    std::cout << "Iteration " << i << " with loss = " << loss;
+    if(!dnn->isAutoencoder())
+        std::cout << " acc = " << acc << std::endl;
+    else
+        std::cout << std::endl;
+    if(std::isnan(loss))
+        return false;
+    else
+        return true;
+}
 
 optimizer::outputs optimizer::SGD(DNN* dnn, Batch train_batch, Batch test_batch
     , size_t n_batch_size, size_t n_iteraions, size_t n_save_interval, double step_size
-    , bool f_save) {
+    , double decay, bool f_save) {
     std::vector<double>* loss_shots = new std::vector<double>;
     std::vector<double>* acc_shots = new std::vector<double>;
     if(f_save) {
         loss_shots->push_back(dnn->zero_oracle(train_batch));
-        acc_shots->push_back(dnn->get_accuracy(test_batch));
+        if(!dnn->isAutoencoder())
+            acc_shots->push_back(dnn->get_accuracy(test_batch));
     }
     for(size_t i = 0; i < n_iteraions; i ++) {
-        Batch minibatch = random_batch_generator(train_batch, n_batch_size);
+        Batch minibatch = random_batch_generator(train_batch, n_batch_size
+            , dnn->isAutoencoder());
         std::vector<Tuple> grad = dnn->first_oracle(minibatch);
+        // Adopt Decay Scheme in Keras SGD.
+        step_size *= 1.0 / (1.0 + decay * (i + 1));
         for(auto tuple : grad)
             tuple *= -step_size;
         dnn->update_parameters(grad);
         if(f_save && !(i % n_save_interval)) {
-            double loss = dnn->zero_oracle(train_batch);
-            double acc = dnn->get_accuracy(test_batch);
-            loss_shots->push_back(loss);
-            acc_shots->push_back(acc);
-            std::cout.precision(13);
-            std::cout << "Iteration " << i << " with loss = " << loss
-                << " acc = " << acc << std::endl;
+            if(!standard_trace(dnn, i, train_batch, test_batch, loss_shots
+                , acc_shots)) {
+                std::cerr << "NaN Occurred." << std::endl;
+                return optimizer::outputs(loss_shots, acc_shots);
+            }
         }
         // Clean up temp memory
         for(auto tuple : grad)
@@ -60,35 +89,48 @@ optimizer::outputs optimizer::Adam(DNN* dnn, Batch train_batch, Batch test_batch
     std::vector<double>* acc_shots = new std::vector<double>;
     if(f_save) {
         loss_shots->push_back(dnn->zero_oracle(train_batch));
-        acc_shots->push_back(dnn->get_accuracy(test_batch));
+        if(!dnn->isAutoencoder())
+            acc_shots->push_back(dnn->get_accuracy(test_batch));
     }
     std::vector<Tuple> m = dnn->get_zero_tuples();
     std::vector<Tuple> v = dnn->get_zero_tuples();
+    // Temp Variables
+    std::vector<Tuple> incr = dnn->get_zero_tuples();
+    double pow_beta1_i = beta1;
+    double pow_beta2_i = beta2;
     for(size_t i = 0; i < n_iteraions; i ++) {
-        Batch minibatch = random_batch_generator(train_batch, n_batch_size);
+        Batch minibatch = random_batch_generator(train_batch, n_batch_size
+            , dnn->isAutoencoder());
         std::vector<Tuple> grad = dnn->first_oracle(minibatch);
-
-        double pow_beta1_i = pow(beta1, (double) (i + 1));
-        double pow_beta2_i = pow(beta2, (double) (i + 1));
-        double alpha = step_size * sqrt(1 - pow_beta2_i) / (1 - pow_beta1_i);
+        double alpha = step_size * sqrt(1.0 - pow_beta2_i) / (1.0 - pow_beta1_i);
         for(size_t j = 0; j < dnn->get_n_layers() - 1; j ++) {
-            m[j] *= (beta1 / (1 - pow_beta1_i));
-            m[j](grad[j], ((1 - beta1) / (1 - pow_beta1_i)));
+            m[j] *= beta1;
+            m[j](grad[j], 1.0 - beta1);
 
-            v[j] *= (beta2 / (1 - pow_beta2_i));
-            v[j]((grad[j] *= grad[j]), ((1 - beta2) / (1 - pow_beta2_i)));
+            v[j] *= beta2;
+            grad[j] *= grad[j];
+            v[j](grad[j], 1.0 - beta2);
 
-            (m[j] *= -alpha) /= ((v[j].coeff_root()) += epsilon);
+            Tuple temp;
+            temp = v[j];
+            temp.coeff_root();
+            temp += epsilon;
+
+            incr[j] = m[j];
+            incr[j] /= temp;
+            incr[j] *= -alpha;
+
+            temp.clean_up();
         }
-        dnn->update_parameters(m);
+        dnn->update_parameters(incr);
+        pow_beta1_i *= beta1;
+        pow_beta2_i *= beta2;
         if(f_save && !(i % n_save_interval)) {
-            double loss = dnn->zero_oracle(train_batch);
-            double acc = dnn->get_accuracy(test_batch);
-            loss_shots->push_back(loss);
-            acc_shots->push_back(acc);
-            std::cout.precision(13);
-            std::cout << "Iteration " << i << " with loss = " << loss
-                << " acc = " << acc << std::endl;
+            if(!standard_trace(dnn, i, train_batch, test_batch, loss_shots
+                , acc_shots)) {
+                std::cerr << "NaN Occurred." << std::endl;
+                return optimizer::outputs(loss_shots, acc_shots);
+            }
         }
         // Clean up temp memory
         for(auto tuple : grad)
@@ -96,13 +138,73 @@ optimizer::outputs optimizer::Adam(DNN* dnn, Batch train_batch, Batch test_batch
         minibatch.clean_up();
     }
     // Clean up temp memory
-    for(auto tuple : m)
-        tuple.clean_up();
-    for(auto tuple : v)
-        tuple.clean_up();
+    for(size_t j = 0; j < dnn->get_n_layers() - 1; j ++) {
+        m[j].clean_up();
+        v[j].clean_up();
+        incr[j].clean_up();
+    }
     optimizer::outputs outs(loss_shots, acc_shots);
     return outs;
 }
+
+optimizer::outputs optimizer::AdaGrad(DNN* dnn, Batch train_batch, Batch test_batch
+    , size_t n_batch_size, size_t n_iteraions, size_t n_save_interval
+    , double step_size, double epsilon, bool f_save) {
+    std::vector<double>* loss_shots = new std::vector<double>;
+    std::vector<double>* acc_shots = new std::vector<double>;
+    if(f_save) {
+        loss_shots->push_back(dnn->zero_oracle(train_batch));
+        if(!dnn->isAutoencoder())
+            acc_shots->push_back(dnn->get_accuracy(test_batch));
+    }
+    std::vector<Tuple> g2_accumulator = dnn->get_zero_tuples();
+    // Temp Variables
+    std::vector<Tuple> incr = dnn->get_zero_tuples();
+    for(size_t i = 0; i < n_iteraions; i ++) {
+        Batch minibatch = random_batch_generator(train_batch, n_batch_size
+            , dnn->isAutoencoder());
+        std::vector<Tuple> grad = dnn->first_oracle(minibatch);
+        for(size_t j = 0; j < dnn->get_n_layers() - 1; j ++) {
+            Tuple temp;
+            temp = grad[j];
+            temp *= temp;
+            g2_accumulator[j] += temp;
+            // First Step using SGD
+            if(i != 0) {
+                temp = g2_accumulator[j];
+                temp += epsilon;
+                temp.coeff_root();
+                temp.reciprocal();
+            }
+
+            incr[j] = grad[j];
+            if(i != 0)
+                incr[j] *= temp;
+            incr[j] *= -step_size;
+            temp.clean_up();
+        }
+        dnn->update_parameters(incr);
+
+        if(f_save && !(i % n_save_interval)) {
+            if(!standard_trace(dnn, i, train_batch, test_batch, loss_shots
+                , acc_shots)) {
+                std::cerr << "NaN Occurred." << std::endl;
+                return optimizer::outputs(loss_shots, acc_shots);
+            }
+        }
+        // Clean up temp memory
+        for(auto tuple : grad)
+            tuple.clean_up();
+        minibatch.clean_up();
+    }
+    // Clean up temp memory
+    for(Tuple tuple : incr) {
+        tuple.clean_up();
+    }
+    optimizer::outputs outs(loss_shots, acc_shots);
+    return outs;
+}
+
 
 optimizer::outputs optimizer::SCR(DNN* dnn, Batch train_batch, Batch test_batch
     , size_t g_batch_size, size_t hv_batch_size, size_t n_iteraions, size_t sub_iterations
@@ -112,12 +214,15 @@ optimizer::outputs optimizer::SCR(DNN* dnn, Batch train_batch, Batch test_batch
     std::vector<double>* acc_shots = new std::vector<double>;
     if(f_save) {
         loss_shots->push_back(dnn->zero_oracle(train_batch));
-        acc_shots->push_back(dnn->get_accuracy(test_batch));
+        if(!dnn->isAutoencoder())
+            acc_shots->push_back(dnn->get_accuracy(test_batch));
     }
     size_t n_layers = dnn->get_n_layers();
     for(size_t i = 0; i < n_iteraions; i ++) {
-        Batch g_batch = random_batch_generator(train_batch, g_batch_size);
-        Batch hv_batch = random_batch_generator(train_batch, hv_batch_size);
+        Batch g_batch = random_batch_generator(train_batch, g_batch_size
+            , dnn->isAutoencoder());
+        Batch hv_batch = random_batch_generator(train_batch, hv_batch_size
+            , dnn->isAutoencoder());
 
         std::vector<Tuple> grad = dnn->first_oracle(g_batch);
         std::vector<Tuple> delta = dnn->get_zero_tuples();
@@ -156,15 +261,12 @@ optimizer::outputs optimizer::SCR(DNN* dnn, Batch train_batch, Batch test_batch
                 hv_delta[k].clean_up();
         }
         dnn->update_parameters(delta);
-
         if(f_save && !(i % n_save_interval)) {
-            double loss = dnn->zero_oracle(train_batch);
-            double acc = dnn->get_accuracy(test_batch);
-            loss_shots->push_back(loss);
-            acc_shots->push_back(acc);
-            std::cout.precision(13);
-            std::cout << "Iteration " << i << " with loss = " << loss
-                << " acc = " << acc << std::endl;
+            if(!standard_trace(dnn, i, train_batch, test_batch, loss_shots
+                , acc_shots)) {
+                std::cerr << "NaN Occurred." << std::endl;
+                return optimizer::outputs(loss_shots, acc_shots);
+            }
         }
         // // For Hessian_Vector_Approxiamate
         // for(auto tuple : hv_grad)

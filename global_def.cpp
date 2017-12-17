@@ -2,6 +2,11 @@
 
 using namespace global_def;
 
+Tuple::Tuple() {
+    _w = new MatrixXr();
+    _b = new VectorXr();
+}
+
 void Tuple::clean_up() {
    delete _w;
    delete _b;
@@ -58,8 +63,8 @@ Tuple& Tuple::operator /=(const Tuple& rhs) {
 }
 
 Tuple& Tuple::operator =(const Tuple& rhs) {
-    *(this->_w) = *(rhs._w);
-    *(this->_b) = *(rhs._b);
+    (*(this->_w)) = (*(rhs._w));
+    (*(this->_b)) = (*(rhs._b));
     return *this;
 }
 
@@ -86,6 +91,13 @@ Tuple& Tuple::coeff_root() {
     *(this->_b) = (*this->_b).array().sqrt();
     return *this;
 }
+
+Tuple& Tuple::reciprocal() {
+    *(this->_w) = 1.0 / (*this->_w).array();
+    *(this->_b) = 1.0 / (*this->_b).array();
+    return *this;
+}
+
 
 double Tuple::sum() {
     return (*_w).sum() + (*_b).sum();
