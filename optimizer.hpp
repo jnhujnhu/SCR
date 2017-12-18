@@ -28,7 +28,7 @@ namespace optimizer {
         , bool f_save);
     outputs SCR(DNN* dnn, Batch train_batch, Batch test_batch, size_t g_batch_size
         , size_t hv_batch_size, size_t n_iteraions, size_t sub_iterations
-        , size_t n_save_interval, size_t petb_interval, double eta, double rho
+        , size_t n_save_interval, size_t petb_interval, double L, double rho
         , double sigma, bool f_save);
 }
 

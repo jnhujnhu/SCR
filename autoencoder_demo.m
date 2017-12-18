@@ -33,50 +33,52 @@ n_save_interval = 200;
 is_plot = true;
 X_axis = [0:1:n_iterations / n_save_interval]';
 
-%% SGD
-algorithm = 'SGD';
+% %% SGD
+% algorithm = 'SGD';
 step_size = 0.5;
-decay = 0; % Decay step size (step_size * 1 / (1 + decay * iter))
-fprintf('Algorithm: %s\n', algorithm);
-tic;
-[loss1] = interface(X, y, XT, yT, Class, n_layers, stuc_layers, algorithm ...
-    , lambda, batch_size, n_iterations, n_save_interval, step_size, decay);
-time = toc;
-fprintf('Time: %f seconds \n', time);
-loss1 = [X_axis, loss1];
-
-%% Adam
-algorithm = 'Adam';
-step_size = 0.01;
-% Adam_params: [Beta1, Beta2, epsilon]
-adam_params = [0.9, 0.999, 1e-08];
-fprintf('Algorithm: %s\n', algorithm);
-tic;
-[loss2] = interface(X, y, XT, yT, Class, n_layers, stuc_layers, algorithm ...
-    , lambda, batch_size, n_iterations, n_save_interval, step_size, adam_params);
-time = toc;
-fprintf('Time: %f seconds \n', time);
-loss2 = [X_axis, loss2];
-
-%% AdaGrad
-algorithm = 'AdaGrad';
-step_size = 0.5;
-epsilon = 1e-08;
-fprintf('Algorithm: %s\n', algorithm);
-tic;
-[loss4] = interface(X, y, XT, yT, Class, n_layers, stuc_layers, algorithm ...
-    , lambda, batch_size, n_iterations, n_save_interval, step_size, epsilon);
-time = toc;
-fprintf('Time: %f seconds \n', time);
-loss4 = [X_axis, loss4];
+% decay = 0; % Decay step size (step_size * 1 / (1 + decay * iter))
+% fprintf('Algorithm: %s\n', algorithm);
+% tic;
+% [loss1] = interface(X, y, XT, yT, Class, n_layers, stuc_layers, algorithm ...
+%     , lambda, batch_size, n_iterations, n_save_interval, step_size, decay);
+% time = toc;
+% fprintf('Time: %f seconds \n', time);
+% loss1 = [X_axis, loss1];
+% 
+% %% Adam
+% algorithm = 'Adam';
+% step_size = 0.01;
+% % Adam_params: [Beta1, Beta2, epsilon]
+% adam_params = [0.9, 0.999, 1e-08];
+% fprintf('Algorithm: %s\n', algorithm);
+% tic;
+% [loss2] = interface(X, y, XT, yT, Class, n_layers, stuc_layers, algorithm ...
+%     , lambda, batch_size, n_iterations, n_save_interval, step_size, adam_params);
+% time = toc;
+% fprintf('Time: %f seconds \n', time);
+% loss2 = [X_axis, loss2];
+% 
+% %% AdaGrad
+% algorithm = 'AdaGrad';
+% step_size = 0.5;
+% epsilon = 1e-08;
+% fprintf('Algorithm: %s\n', algorithm);
+% tic;
+% [loss4] = interface(X, y, XT, yT, Class, n_layers, stuc_layers, algorithm ...
+%     , lambda, batch_size, n_iterations, n_save_interval, step_size, epsilon);
+% time = toc;
+% fprintf('Time: %f seconds \n', time);
+% loss4 = [X_axis, loss4];
 
 %% SCR
 algorithm = 'SCR';
-n_iterations = 3000;
+n_iterations = 1300;
 n_save_interval = 100;
 g_batch_size = 100;
-% SCR_params: [hv_batch_size, sub_iterations, petb_interval, eta, rho, sigma]
-scr_params = [10, 10, 0, 0.09, 0.0001, 0.0001];
+% SCR_params: [hv_batch_size, sub_iterations, petb_interval, L, rho, sigma]
+% petb_interval = 0 stands for Perturbe Method in Paper
+% 1/(20L) for subsolver 
+scr_params = [10, 20, 0, 1.0, 0.01, 0.0001];
 fprintf('Algorithm: %s\n', algorithm);
 tic;
 [loss3] = interface(X, y, XT, yT, Class, n_layers, stuc_layers, algorithm ...

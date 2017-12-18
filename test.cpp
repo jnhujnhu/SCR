@@ -22,27 +22,27 @@ int main()
          1,0,0,
          0,0,1;
     Batch batch(&X, &Y, 3);
-    // std::vector<Tuple> grad = dnn.first_oracle(batch);
-    // std::vector<Tuple> delta2 = dnn.get_perturb_tuples();
-    // std::vector<Tuple> delta = dnn.get_ones_tuples();
-    // for(size_t j = 0; j < dnn.get_n_layers() - 1; j ++) {
-    //     (delta2[j] *= 3) += delta[j];
-    //     delta[j] = delta2[j];
-    // }
-    // // Hessian Vector Check
-    // std::vector<Tuple> res = dnn.hessian_vector_oracle(batch, delta);
-    // std::vector<Tuple> res2 = dnn.hessian_vector_approxiamate_oracle(batch, grad, delta);
-    // double a = 0, a2 = 0;
-    // for(size_t j = 0; j < dnn.get_n_layers() - 1; j ++) {
-    //     delta[j] *= res[j];
-    //     delta2[j] *= res2[j];
-    //     a += delta[j].sum();
-    //     a2 += delta2[j].sum();
-    // }
-    // std::cout << a << std::endl << a2 << std::endl;
+    std::vector<Tuple> grad = dnn.first_oracle(batch);
+    std::vector<Tuple> delta2 = dnn.get_perturb_tuples();
+    std::vector<Tuple> delta = dnn.get_ones_tuples();
+    for(size_t j = 0; j < dnn.get_n_layers() - 1; j ++) {
+        (delta2[j] *= 3) += delta[j];
+        delta[j] = delta2[j];
+    }
+    // Hessian Vector Check
+    std::vector<Tuple> res = dnn.hessian_vector_oracle(batch, delta);
+    std::vector<Tuple> res2 = dnn.hessian_vector_approxiamate_oracle(batch, grad, delta);
+    double a = 0, a2 = 0;
+    for(size_t j = 0; j < dnn.get_n_layers() - 1; j ++) {
+        delta[j] *= res[j];
+        delta2[j] *= res2[j];
+        a += delta[j].sum();
+        a2 += delta2[j].sum();
+    }
+    std::cout << a << std::endl << a2 << std::endl;
     // Check Memory Leak
     // optimizer::SCR(&dnn, batch, batch, 3, 3, 200000, 10, 1, 0, 0.05, 0.1, 1.1, true);
     // optimizer::Adam(&dnn, batch, batch, 3, 200000, 10, 0.01, 0.9, 0.999, 1e-08, true);
     // optimizer::AdaGrad(&dnn, batch, batch, 3, 200000, 10, 0.5, 1e-08, true);
-    optimizer::SGD(&dnn, batch, batch, 3, 200000, 10, 0.5, 0, true);
+    // optimizer::SGD(&dnn, batch, batch, 3, 200000, 10, 0.5, 0, true);
 }
