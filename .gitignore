@@ -2,9 +2,11 @@
 *.d
 
 # reference
+/ref/
 *.pdf
 
 # figure
+/plots/
 *.eps
 *.png
 
@@ -15,6 +17,7 @@
 # template
 *.cpp.t
 *.hpp.t
+COMMAND
 
 # Compiled Object files
 *.slo

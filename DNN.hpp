@@ -13,6 +13,8 @@ public:
         , bool is_autoencoder = false, int regularizer = L2);
     ~DNN();
     void print_all();
+    // copy constructor
+    DNN(const DNN& dnn);
     // passing increments
     void update_parameters(std::vector<Tuple> tuples);
     double get_accuracy(Batch test_batch);
@@ -22,8 +24,12 @@ public:
     std::vector<Tuple> hessian_vector_approxiamate_oracle(Batch batch
         , std::vector<Tuple> grad, std::vector<Tuple> V);
 
+    // Trick 1:
+    std::vector<Tuple> perturbed_batch_first_oracle(Batch batch, double radius);
+
     std::vector<Tuple> get_zero_tuples();
     std::vector<Tuple> get_ones_tuples();
+    std::vector<Tuple> get_param_tuples();
     // Generate perturbing Tuples
     std::vector<Tuple> get_perturb_tuples();
     size_t get_n_layers();
@@ -38,8 +44,8 @@ private:
     double* m_params;
     int m_regularizer;
     bool is_autoencoder;
-    std::vector<MatrixXr*>* m_weights;
-    std::vector<VectorXr*>* m_biases;
+    std::vector<MatrixXr*> m_weights;
+    std::vector<VectorXr*> m_biases;
 };
 
 #endif

@@ -33,12 +33,13 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
         if(nlhs == 1)
             is_train_autoencoder = true;
 
+
         // Construct DNN Model
         size_t stuc_layers[n_layers];
         for(size_t i = 0; i < n_layers; i ++)
             stuc_layers[i] = (size_t) (int) i_stuc_layers[i];
         DNN dnn(n_layers, stuc_layers, 1, &lambda, 1.3 / sqrt((double)(DIM + CLASS))
-            , I_GAUSSIAN, is_train_autoencoder);
+            , I_ZERO, is_train_autoencoder);
 
         // Parse Data Matrices
         Eigen::Map<MatrixXr>* X = new Eigen::Map<MatrixXr>(r_X, NF, DIM);
@@ -67,9 +68,13 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
         size_t len_stored_loss, len_stored_acc;
         if(strcmp(_algo, "SGD") == 0) {
             double decay = mxGetScalar(prhs[13]);
+            // perturbed batch trick parameters
+            bool using_petb_iterate = (bool) mxGetScalar(prhs[14]);
+            bool using_petb_batch = (bool) mxGetScalar(prhs[15]);
+            double petb_radius = mxGetScalar(prhs[16]);
             optimizer::outputs outs = optimizer::SGD(&dnn, train_batch
                 , test_batch, batch_size, n_iteraions, n_save_interval, step_size
-                , decay, f_save);
+                , decay, using_petb_iterate, using_petb_batch, petb_radius, f_save);
             stored_loss = &(*outs._losses)[0];
             stored_acc = &(*outs._accuracies)[0];
             len_stored_loss = outs._losses->size();
@@ -105,6 +110,17 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
                 , test_batch, batch_size, hv_batch_size, n_iteraions, sub_iterations
                 , n_save_interval, petb_interval, scr_params[3], scr_params[4]
                 , scr_params[5], f_save);
+            stored_loss = &(*outs._losses)[0];
+            stored_acc = &(*outs._accuracies)[0];
+            len_stored_loss = outs._losses->size();
+            len_stored_acc = outs._accuracies->size();
+        }
+        else if(strcmp(_algo, "SSFN") == 0) {
+            double epsilon = mxGetScalar(prhs[13]);
+            size_t hv_batch_size = (size_t) mxGetScalar(prhs[14]);
+            optimizer::outputs outs = optimizer::SSFN(&dnn, train_batch
+                , test_batch, batch_size, hv_batch_size, n_iteraions
+                , n_save_interval, step_size, epsilon, f_save);
             stored_loss = &(*outs._losses)[0];
             stored_acc = &(*outs._accuracies)[0];
             len_stored_loss = outs._losses->size();

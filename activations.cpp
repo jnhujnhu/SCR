@@ -32,15 +32,15 @@ void activations::softplus_1th_backpropagation(Tuple _pF, Tuple _F, MatrixXr* _p
 void activations::softplus_2th_hessian_vector_bp(Tuple _hvF, Tuple _F, Tuple _V
     , MatrixXr* _pX, MatrixXr* _hvX, MatrixXr* _X, MatrixXr* _RX, MatrixXr* _D
     , MatrixXr* _hvD, size_t Const, bool is_input_layer) {
-    MatrixXr dl_dy = (*_F._w) * (*_X) + (*_F._b);
-    MatrixXr v = (*_V._w) * (*_X) + (*_V._b) + (*_F._w) * (*_RX);
+    auto dl_dy = (*_F._w) * (*_X) + (*_F._b);
+    auto v = (*_V._w) * (*_X) + (*_V._b) + (*_F._w) * (*_RX);
     MatrixXr df_dy = dl_dy.array().exp();
 
     df_dy = df_dy.array() / (df_dy.array() + 1).array();
-    dl_dy = ((*_D).transpose().array() * df_dy.array());
+    auto t_dl_dy = ((*_D).transpose().array() * df_dy.array()).matrix();
 
     if(!is_input_layer)
-        (*_pX) = dl_dy.transpose() * (*_F._w);
+        (*_pX) = t_dl_dy.transpose() * (*_F._w);
 
     MatrixXr R_df_dy = df_dy.array() * (1 - df_dy.array()) * v.array();
 
@@ -48,7 +48,7 @@ void activations::softplus_2th_hessian_vector_bp(Tuple _hvF, Tuple _F, Tuple _V
     MatrixXr D_Rfy = (*_D).transpose().array() * R_df_dy.array();
     MatrixXr D_fy = (*_D).transpose().array() * df_dy.array();
 
-    MatrixXr D_Rff = D_Rfy * (*_X).transpose() + D_fy * (*_RX).transpose();
+    auto D_Rff = D_Rfy * (*_X).transpose() + D_fy * (*_RX).transpose();
 
     (*_hvF._w) += (Rdl_dy * (*_X).transpose() + D_Rff) / Const;
     (*_hvF._b) += (Rdl_dy + ((*_D).transpose().array() * R_df_dy.array()).matrix()) / Const;
@@ -78,7 +78,7 @@ void activations::loss_2th_hessian_vector_bp(Tuple _hvF, Tuple _F, Tuple _V
     MatrixXr p = (*_F._w) * (*_X) + (*_F._b);
     MatrixXr R_dl_dy = (*_V._w) * (*_X) + (*_V._b) + (*_F._w) * (*_RX);
     softmax(&p);
-    MatrixXr t_1 = p.array() * R_dl_dy.array();
+    auto t_1 = (p.array() * R_dl_dy.array()).matrix();
     R_dl_dy = t_1 - p * (p.transpose() * R_dl_dy);
     MatrixXr dl_dy = p - *_Y;
     (*_hvF._w) += (R_dl_dy * (*_X).transpose() + dl_dy * (*_RX).transpose()) / Const;
