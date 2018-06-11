@@ -18,17 +18,22 @@ public:
     // passing increments
     void update_parameters(std::vector<Tuple> tuples);
     double get_accuracy(Batch test_batch);
-    double zero_oracle(Batch batch);
-    std::vector<Tuple> first_oracle(Batch batch);
-    std::vector<Tuple> hessian_vector_oracle(Batch batch, std::vector<Tuple> V);
+
+    double zero_oracle(Batch batch, std::vector<Tuple>* ex_point = NULL);
+    std::vector<Tuple> first_oracle(Batch batch, std::vector<Tuple>* ex_point = NULL);
+    std::vector<Tuple> hessian_vector_oracle(Batch batch, std::vector<Tuple> V
+        , std::vector<Tuple>* ex_point = NULL);
     std::vector<Tuple> hessian_vector_approxiamate_oracle(Batch batch
-        , std::vector<Tuple> grad, std::vector<Tuple> V);
+        , std::vector<Tuple> grad, std::vector<Tuple> V
+        , std::vector<Tuple>* ex_point = NULL);
 
     // Trick 1:
     std::vector<Tuple> perturbed_batch_first_oracle(Batch batch, double radius);
 
     std::vector<Tuple> get_zero_tuples();
     std::vector<Tuple> get_ones_tuples();
+    std::vector<Tuple> get_param_tuples_copy();
+    // POINTERS
     std::vector<Tuple> get_param_tuples();
     // Generate perturbing Tuples
     std::vector<Tuple> get_perturb_tuples();

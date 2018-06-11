@@ -72,9 +72,11 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
             bool using_petb_iterate = (bool) mxGetScalar(prhs[14]);
             bool using_petb_batch = (bool) mxGetScalar(prhs[15]);
             double petb_radius = mxGetScalar(prhs[16]);
+            bool using_saddle_free_gradient = (bool) mxGetScalar(prhs[17]);
             optimizer::outputs outs = optimizer::SGD(&dnn, train_batch
                 , test_batch, batch_size, n_iteraions, n_save_interval, step_size
-                , decay, using_petb_iterate, using_petb_batch, petb_radius, f_save);
+                , decay, using_saddle_free_gradient, using_petb_iterate
+                , using_petb_batch, petb_radius, f_save);
             stored_loss = &(*outs._losses)[0];
             stored_acc = &(*outs._accuracies)[0];
             len_stored_loss = outs._losses->size();

@@ -88,9 +88,9 @@ void DNN::initialize(Eigen::PlainObjectBase<Derived>* _mx, double std_dev
 }
 
 double DNN::gaussian_unary(double dummy) {
-    std::random_device rd;
-    std::mt19937 generator(rd());
-    std::normal_distribution<double> distribution(0, 1);
+    static std::random_device rd;
+    static std::mt19937 generator(rd());
+    static std::normal_distribution<double> distribution(0, 1);
     return distribution(generator);
 }
 
@@ -140,6 +140,19 @@ std::vector<Tuple> DNN::get_ones_tuples() {
     return zero_tuples;
 }
 
+std::vector<Tuple> DNN::get_param_tuples_copy() {
+    std::vector<Tuple> param_tuples;
+    for(size_t i = 0; i < n_layers - 1; i ++) {
+        MatrixXr* t_weights = new MatrixXr(stuc_layers[i + 1], stuc_layers[i]);
+        *t_weights = *m_weights[i];
+        VectorXr* t_biases = new VectorXr(stuc_layers[i + 1]);
+        *t_biases = *m_biases[i];
+        Tuple tuple(t_weights, t_biases);
+        param_tuples.push_back(tuple);
+    }
+    return param_tuples;
+}
+
 std::vector<Tuple> DNN::get_param_tuples() {
     std::vector<Tuple> param_tuples;
     for(size_t i = 0; i < n_layers - 1; i ++) {
@@ -151,17 +164,20 @@ std::vector<Tuple> DNN::get_param_tuples() {
 
 std::vector<Tuple> DNN::get_perturb_tuples() {
     std::vector<Tuple> petb_tuples;
-
+    double sum = 0;
     for(size_t i = 0; i < n_layers - 1; i ++) {
         MatrixXr* t_weights = new MatrixXr(stuc_layers[i + 1], stuc_layers[i]);
-        t_weights->unaryExpr(std::ptr_fun(gaussian_unary));
-        t_weights->normalize();
+        *t_weights = t_weights->unaryExpr(std::ptr_fun(gaussian_unary));
+        sum += t_weights->squaredNorm();
         VectorXr* t_biases = new VectorXr(stuc_layers[i + 1]);
-        t_biases->unaryExpr(std::ptr_fun(gaussian_unary));
-        t_biases->normalize();
+        *t_biases = t_biases->unaryExpr(std::ptr_fun(gaussian_unary));
+        sum += t_biases->squaredNorm();
         Tuple tuple(t_weights, t_biases);
         petb_tuples.push_back(tuple);
     }
+    for(size_t i = 0; i < n_layers - 1; i ++)
+        petb_tuples[i] *= 1.0 / sqrt(sum);
+
     return petb_tuples;
 }
 
@@ -173,16 +189,22 @@ bool DNN::isAutoencoder() {
     return this->is_autoencoder;
 }
 
-double DNN::zero_oracle(Batch batch) {
+double DNN::zero_oracle(Batch batch, std::vector<Tuple>* ex_point) {
     MatrixXr* X = batch._X;
     MatrixXr* Y = batch._Y;
     size_t N = batch._n;
+
+    std::vector<Tuple> params;
+    if(ex_point == NULL) {
+        params = get_param_tuples();
+        ex_point = &params;
+    }
 
     double loss = 0, regularizer = 0;
     for(size_t i = 0; i < N; i ++) {
         MatrixXr temp = (*X).row(i).transpose();
         for (size_t j = 0; j < n_layers - 1; j ++) {
-            temp = *m_weights[j] * temp + *m_biases[j];
+            temp = *((*ex_point)[j]._w) * temp + *((*ex_point)[j]._b);
             if(j < n_layers - 2)
                 activations::softplus(&temp);
             else {
@@ -193,8 +215,8 @@ double DNN::zero_oracle(Batch batch) {
             }
             // Add L2 Regularizer
             if(i == 0) {
-                regularizer += (*m_weights[j]).squaredNorm()
-                        + (*m_biases[j]).squaredNorm();
+                regularizer += (*((*ex_point)[j]._w)).squaredNorm()
+                        + (*((*ex_point)[j]._b)).squaredNorm();
             }
         }
         // Pixel-wise L2 Loss
@@ -206,10 +228,16 @@ double DNN::zero_oracle(Batch batch) {
     return loss + m_params[0] / 2 * regularizer;
 }
 
-std::vector<Tuple> DNN::first_oracle(Batch batch) {
+std::vector<Tuple> DNN::first_oracle(Batch batch, std::vector<Tuple>* ex_point) {
     MatrixXr* X = batch._X;
     MatrixXr* Y = batch._Y;
     size_t N = batch._n;
+
+    std::vector<Tuple> params;
+    if(ex_point == NULL) {
+        params = get_param_tuples();
+        ex_point = &params;
+    }
 
     std::vector<Tuple> result = get_zero_tuples();
     for(size_t i = 0; i < N; i ++) {
@@ -218,7 +246,7 @@ std::vector<Tuple> DNN::first_oracle(Batch batch) {
         _X.push_back(temp);
         // feed forward
         for (size_t j = 0; j < n_layers - 2; j ++) {
-            temp = *m_weights[j] * temp + *m_biases[j];
+            temp = *((*ex_point)[j]._w) * temp + *((*ex_point)[j]._b);
             activations::softplus(&temp);
             _X.push_back(temp);
         }
@@ -229,55 +257,63 @@ std::vector<Tuple> DNN::first_oracle(Batch batch) {
             if(j == int(n_layers) - 2) {
                 MatrixXr _Y = (*Y).row(i).transpose();
                 MatrixXr _pX(1, stuc_layers[j]);
-                Tuple t_F(m_weights[j], m_biases[j]);
                 if(is_autoencoder)
-                    activations::l2loss_1th_backpropagation(result[j], t_F, &_pX, &_X[j]
-                        , &_Y, avg_const);
+                    activations::l2loss_1th_backpropagation(result[j], (*ex_point)[j]
+                        , &_pX, &_X[j], &_Y, avg_const);
                 else
-                    activations::loss_1th_backpropagation(result[j], t_F, &_pX, &_X[j]
-                        , &_Y, avg_const);
+                    activations::loss_1th_backpropagation(result[j], (*ex_point)[j]
+                        , &_pX, &_X[j], &_Y, avg_const);
                 _D = _pX;
             }
             else {
                 MatrixXr _pX(1, stuc_layers[j]);
-                Tuple t_F(m_weights[j], m_biases[j]);
-                activations::softplus_1th_backpropagation(result[j], t_F, &_pX, &_X[j]
-                    , &_D, avg_const, (j == 0) ? true : false);
+                activations::softplus_1th_backpropagation(result[j], (*ex_point)[j]
+                    , &_pX, &_X[j], &_D, avg_const, (j == 0) ? true : false);
                 _D = _pX;
             }
         }
     }
     // Add L2 Regularizer
     for (size_t j = 0; j < n_layers - 1; j ++) {
-        Tuple t_F(m_weights[j], m_biases[j]);
-        result[j](t_F, m_params[0]);
+        result[j]((*ex_point)[j], m_params[0]);
     }
     return result;
 }
 
 std::vector<Tuple> DNN::hessian_vector_approxiamate_oracle(Batch batch
-    , std::vector<Tuple> grad, std::vector<Tuple> V) {
+    , std::vector<Tuple> grad, std::vector<Tuple> V
+    , std::vector<Tuple>* ex_point) {
+    std::vector<Tuple> params;
+    if(ex_point == NULL) {
+        params = get_param_tuples();
+        ex_point = &params;
+    }
     double r = 0.001;
     for(size_t i = 0; i < n_layers - 1; i ++) {
-        *m_weights[i] += r * (*V[i]._w);
-        *m_biases[i] += r * (*V[i]._b);
+        (*ex_point)[i](V[i], r);
     }
     std::vector<Tuple> result = first_oracle(batch);
     for(size_t i = 0; i < n_layers - 1; i ++) {
         result[i](grad[i], -1);
         result[i] *= 1.0 / r;
         // Restore
-        *m_weights[i] += -r * (*V[i]._w);
-        *m_biases[i] += -r * (*V[i]._b);
+        (*ex_point)[i](V[i], -r);
     }
     return result;
 }
 
 // Using R{} Technique
-std::vector<Tuple> DNN::hessian_vector_oracle(Batch batch, std::vector<Tuple> V) {
+std::vector<Tuple> DNN::hessian_vector_oracle(Batch batch, std::vector<Tuple> V
+    , std::vector<Tuple>* ex_point) {
     MatrixXr* X = batch._X;
     MatrixXr* Y = batch._Y;
     size_t N = batch._n;
+
+    std::vector<Tuple> params;
+    if(ex_point == NULL) {
+        params = get_param_tuples();
+        ex_point = &params;
+    }
 
     std::vector<Tuple> result = get_zero_tuples();
     for(size_t i = 0; i < N; i ++) {
@@ -291,13 +327,13 @@ std::vector<Tuple> DNN::hessian_vector_oracle(Batch batch, std::vector<Tuple> V)
         // HV feed forward
         for (size_t j = 0; j < n_layers - 2; j ++) {
             MatrixXr prev_temp_X = temp_X, prev_temp_RX = temp_RX;
-            temp_X = *m_weights[j] * temp_X + *m_biases[j];
+            temp_X = *((*ex_point)[j]._w) * temp_X + *((*ex_point)[j]._b);
             temp_RX = temp_X;
             activations::softplus(&temp_X);
             // softplus_1th_derivative
             activations::sigmoid(&temp_RX);
             temp_RX = temp_RX.array() * (*V[j]._w * prev_temp_X
-                              + *m_weights[j] * prev_temp_RX
+                              + *((*ex_point)[j]._w) * prev_temp_RX
                               + *V[j]._b).array();
             _X.push_back(temp_X);
             _RX.push_back(temp_RX);
@@ -310,22 +346,20 @@ std::vector<Tuple> DNN::hessian_vector_oracle(Batch batch, std::vector<Tuple> V)
                 MatrixXr _Y = (*Y).row(i).transpose();
                 MatrixXr _pX(1, stuc_layers[j]);
                 MatrixXr _hvX(1, stuc_layers[j]);
-                Tuple t_F(m_weights[j], m_biases[j]);
                 if(is_autoencoder)
-                    activations::l2loss_2th_hessian_vector_bp(result[j], t_F, V[j], &_pX
-                        , &_hvX, &_X[j], &_RX[j], &_Y, avg_const);
+                    activations::l2loss_2th_hessian_vector_bp(result[j], (*ex_point)[j]
+                        , V[j], &_pX, &_hvX, &_X[j], &_RX[j], &_Y, avg_const);
                 else
-                    activations::loss_2th_hessian_vector_bp(result[j], t_F, V[j], &_pX
-                        , &_hvX, &_X[j], &_RX[j], &_Y, avg_const);
+                    activations::loss_2th_hessian_vector_bp(result[j], (*ex_point)[j]
+                        , V[j], &_pX, &_hvX, &_X[j], &_RX[j], &_Y, avg_const);
                 _D = _pX;
                 _hvD = _hvX;
             }
             else {
                 MatrixXr _pX(1, stuc_layers[j]);
                 MatrixXr _hvX(1, stuc_layers[j]);
-                Tuple t_F(m_weights[j], m_biases[j]);
-                activations::softplus_2th_hessian_vector_bp(result[j], t_F, V[j]
-                    , &_pX, &_hvX, &_X[j], &_RX[j], &_D, &_hvD, avg_const
+                activations::softplus_2th_hessian_vector_bp(result[j], (*ex_point)[j]
+                    , V[j], &_pX, &_hvX, &_X[j], &_RX[j], &_D, &_hvD, avg_const
                     , (j == 0) ? true : false);
                 _D = _pX;
                 _hvD = _hvX;

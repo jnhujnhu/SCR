@@ -20,8 +20,8 @@ namespace optimizer {
     void deliberate_perturbe(DNN *dnn, std::vector<Tuple> target, double std_dev);
     outputs SGD(DNN* dnn, Batch train_batch, Batch test_batch, size_t n_batch_size
         , size_t n_iteraions, size_t n_save_interval, double step_size
-        , double decay, bool using_petb_iterate, bool using_petb_batch
-        , double petb_radius, bool f_save);
+        , double decay, bool using_saddle_free_gradient, bool using_petb_iterate
+        , bool using_petb_batch, double petb_radius, bool f_save);
     outputs Adam(DNN* dnn, Batch train_batch, Batch test_batch, size_t n_batch_size
         , size_t n_iteraions, size_t n_save_interval, double step_size, double beta1
         , double beta2, double epsilon, bool f_save);

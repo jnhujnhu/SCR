@@ -58,8 +58,8 @@ void optimizer::deliberate_perturbe(DNN *dnn, std::vector<Tuple> target, double 
 
 optimizer::outputs optimizer::SGD(DNN* dnn, Batch train_batch, Batch test_batch
     , size_t n_batch_size, size_t n_iteraions, size_t n_save_interval, double step_size
-    , double decay, bool using_petb_iterate, bool using_petb_batch, double petb_radius
-    , bool f_save) {
+    , double decay, bool using_saddle_free_gradient, bool using_petb_iterate
+    , bool using_petb_batch, double petb_radius, bool f_save) {
     std::vector<double>* loss_shots = new std::vector<double>;
     std::vector<double>* acc_shots = new std::vector<double>;
     if(f_save) {
@@ -67,16 +67,41 @@ optimizer::outputs optimizer::SGD(DNN* dnn, Batch train_batch, Batch test_batch
         if(!dnn->isAutoencoder())
             acc_shots->push_back(dnn->get_accuracy(test_batch));
     }
+
+    std::random_device rd;
+    std::mt19937 generator(rd());
+    std::uniform_real_distribution<> distribution(0.0, petb_radius);
+    std::vector<Tuple> snapshot;
+    // Create snapshot point
+    if(using_saddle_free_gradient)
+        snapshot = dnn->get_param_tuples_copy();
     for(size_t i = 0; i < n_iteraions; i ++) {
         Batch minibatch = random_batch_generator(train_batch, n_batch_size
             , dnn->isAutoencoder());
         std::vector<Tuple> grad;
+        if(using_saddle_free_gradient && !(i % 15)) {
+            std::vector<Tuple> params = dnn->get_param_tuples_copy();
+            grad = dnn->first_oracle(minibatch, &snapshot);
+            for(size_t j = 0; j < dnn->get_n_layers() - 1; j ++)
+                params[j] -= snapshot[j];
+            // Compute H^2(v)
+            std::vector<Tuple> h_p = dnn->hessian_vector_oracle(minibatch, params, &snapshot);
+            std::vector<Tuple> hh_p = dnn->hessian_vector_oracle(minibatch, h_p, &snapshot);
+            for(size_t j = 0; j < dnn->get_n_layers() - 1; j ++) {
+                grad[j] += hh_p[j];
+                params[j].clean_up();
+                h_p[j].clean_up();
+                hh_p[j].clean_up();
+            }
+            // Update snapshot point
+            snapshot = dnn->get_param_tuples_copy();
+        }
         // Methods of Adding Perturbation
-        if(using_petb_batch)
+        else if(using_petb_batch)
             grad = dnn->perturbed_batch_first_oracle(minibatch, petb_radius);
         else if(using_petb_iterate) {
             grad = dnn->first_oracle(minibatch);
-            deliberate_perturbe(dnn, grad, petb_radius);
+            deliberate_perturbe(dnn, grad, distribution(generator));
         }
         else
             grad = dnn->first_oracle(minibatch);
